@@ -204,7 +204,7 @@ Users can upload:
 - Use Multer
 - Validate file type
 - Validate file size
-- Store uploaded files locally
+- Store uploaded files online
 
 ---
 
