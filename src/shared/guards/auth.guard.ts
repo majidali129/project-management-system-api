@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import type { Request } from 'express';
-import { Role } from 'src/users/schemas/user.schema';
+import { Role } from '../types/role';
 
 @Injectable()
 export class AuthGuard implements CanActivate {

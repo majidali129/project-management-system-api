@@ -10,9 +10,10 @@ import { LoginUserDto } from './dtos/login-user.dto';
 import bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Role, User } from 'src/users/schemas/user.schema';
+import { User } from 'src/users/schemas/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { Role } from 'src/shared/types/role';
 
 @Injectable()
 export class AuthService {

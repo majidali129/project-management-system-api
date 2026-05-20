@@ -6,7 +6,7 @@ import {
   IsString,
   MinLength,
 } from 'class-validator';
-import { Role } from 'src/users/schemas/user.schema';
+import { Role } from 'src/shared/types/role';
 
 export class CreateUserDto {
   @IsString()
