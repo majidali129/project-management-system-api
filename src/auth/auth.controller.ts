@@ -5,7 +5,6 @@ import {
   HttpStatus,
   Patch,
   Post,
-  Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -14,6 +13,8 @@ import { CreateUserDto } from './dtos/create-user.dto';
 import { LoginUserDto } from './dtos/login-user.dto';
 import type { Request, Response } from 'express';
 import { AuthGuard } from 'src/shared/guards/auth.guard';
+import { User } from 'src/shared/decorators/user.decorator';
+import type { AuthorizedUser } from 'src/shared/types/auth-user';
 
 @Controller('auth')
 export class AuthController {
@@ -45,9 +46,8 @@ export class AuthController {
 
   @UseGuards(AuthGuard)
   @Patch('/logout')
-  async logout(@Req() req: Request, @Res() res: Response) {
-    console.log(req.user);
-    await this.authService.logout(req.user.id);
+  async logout(@User() user: AuthorizedUser, @Res() res: Response) {
+    await this.authService.logout(user.id);
     res.cookie('accessToken', '');
     res.cookie('refreshToken', '');
     res.removeHeader('Authorization');

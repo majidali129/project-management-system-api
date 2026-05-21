@@ -8,6 +8,7 @@ export type UserDocument = HydratedDocument<User>;
   timestamps: true,
   toJSON: {
     transform: (_doc, ret: Record<string, any>) => {
+      ret['id'] = ret._id as string;
       delete ret.__v;
       delete ret.password;
       delete ret._id;
@@ -30,7 +31,14 @@ export class User {
   })
   password: string;
 
-  @Prop({ required: [true, 'Role is required'], type: String, enum: Role })
+  @Prop({
+    required: [true, 'Role is required'],
+    type: String,
+    enum: {
+      values: Object.values(Role),
+      message: `Role could be either ${Object.values(Role).join(', ')}`,
+    },
+  })
   role: Role;
 
   @Prop({ type: String })
