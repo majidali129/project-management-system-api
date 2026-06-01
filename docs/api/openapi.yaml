@@ -1,0 +1,1694 @@
+openapi: 3.0.0
+info:
+  title: Project Management System
+  version: 1.0.0
+  description: >
+    A RESTful API for managing projects, tasks, and comments with role-based access control.
+    All protected endpoints require a Bearer JWT token obtained from `/auth/login`.
+servers:
+  - url: 'http://localhost:3000'
+    description: Local development server
+tags:
+  - name: Authentication
+    description: Register, login, and logout
+  - name: Projects
+    description: Create and manage projects, members, and status
+  - name: Tasks
+    description: Create, update, assign, and manage tasks within projects
+  - name: Comments  
+    description: Comment on tasks and manage comments
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    # ─── Enums ───────────────────────────────────────────────
+    Role:
+      type: string
+      enum: [admin, user]
+ 
+    ProjectStatus:
+      type: string
+      enum: [active, archived]
+ 
+    TaskStatus:
+      type: string
+      enum: [todo, in_progress, done]
+ 
+    TaskPriority:
+      type: string
+      enum: [low, medium, high]
+  # ─── User ────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6a0eec205a0dabe0d64ad30a
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        role:
+          $ref: '#/components/schemas/Role'
+        avatar:
+          type: string
+          nullable: true
+          example: https://example.com/avatar.png
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+ 
+    # ─── Project ─────────────────────────────────────────────
+    Project:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6a1d9263a8f99944ba070066
+        title:
+          type: string
+          example: Implement User Authentication
+        description:
+          type: string
+          example: Allow project owners to invite members and manage project access.
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        ownerId:
+          type: string
+          example: 6a0eec205a0dabe0d64ad30a
+        members:
+          type: array
+          items:
+            type: string
+          example: [6a0eec0c5a0dabe0d64ad30b]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+ 
+    # ─── Task ────────────────────────────────────────────────
+    Task:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6a1dc57109714d00e4dd6ee1
+        title:
+          type: string
+          example: Add Activity Logging
+        description:
+          type: string
+          example: Track user actions such as project creation and task updates.
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        priority:
+          $ref: '#/components/schemas/TaskPriority'
+        dueDate:
+          type: string
+          format: date-time
+          example: '2026-04-05T00:00:00.000Z'
+        assignedTo:
+          type: string
+          nullable: true
+          example: 6a0eec0c5a0dabe0d64ad30b
+        projectId:
+          type: string
+          example: 6a1d9263a8f99944ba070066
+        createdBy:
+          type: string
+          example: 6a0eec205a0dabe0d64ad30a
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+ 
+    # ─── Comment ─────────────────────────────────────────────
+    Comment:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 6a1df2921ce3c86113503399
+        content:
+          type: string
+          example: This looks good, merging now.
+        taskId:
+          type: string
+          example: 6a1dc57109714d00e4dd6ee1
+        userId:
+          type: string
+          example: 6a0eec205a0dabe0d64ad30a
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+ 
+    # ─── Validation Error ────────────────────────────────────
+    ValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Validation failed
+        statusCode:
+          type: integer
+          example: 400
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            email: ['Email must be a valid email address']
+            password: ['Password must be at least 8 characters long']
+ 
+    UnauthorizedError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Unauthorized
+        statusCode:
+          type: integer
+          example: 401
+ 
+    ForbiddenError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: 
+            Access denied: You are not authorized to perform this action
+        statusCode:
+          type: integer
+          example: 403
+ 
+    NotFoundError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Resource not found
+        statusCode:
+          type: integer
+          example: 404
+  # ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+  
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      description: >
+        Creates a new user account. `role` must be either `admin` or `user`.
+        `avatar` is optional.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  example: John Doe
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: secret1234
+                role:
+                  $ref: '#/components/schemas/Role'
+                avatar:
+                  type: string
+                  example: https://example.com/avatar.png
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: User created successfully
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              example:
+                success: false
+                message: Validation failed
+                statusCode: 400
+                errors:
+                  email: ['Email must be a valid email address']
+                  password: ['Password must be at least 8 characters long']
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate user and return JWT tokens
+      description: >
+        Validates credentials and returns a short-lived `accessToken` and a
+        `refreshToken` stored server-side.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: secret1234
+      responses:
+        '200':
+          description: Login successful – JWT tokens returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Login successful
+                  accessToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  refreshToken:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+  /auth/logout:
+    patch:
+      tags: [Authentication]
+      summary: Logout – invalidate the current access token
+      description: Clears the refresh token server-side, effectively ending the session.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+
+ # ══════════════════════════════════════════════════════════
+  # PROJECTS
+  # ══════════════════════════════════════════════════════════
+ 
+  /projects:
+    post:
+      tags: [Projects]
+      summary: Create a new project
+      description: >
+        Creates a project owned by the authenticated user. `members` is optional;
+        `status` defaults to `active`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                  example: Implement User Authentication
+                description:
+                  type: string
+                  maxLength: 200
+                  example: Allow project owners to invite members and manage project access.
+                members:
+                  type: array
+                  items:
+                    type: string
+                  example: [6a0eec205a0dabe0d64ad30a]
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: Project created successfully
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+ 
+    get:
+      tags: [Projects]
+      summary: Get all projects
+      description: >
+        Returns all projects visible to the authenticated user.
+        Admins see every project; regular users see only projects they own or are members of.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Projects fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Projects fetched successfully
+                  projects:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+ 
+  /projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1d9263a8f99944ba070066
+ 
+    get:
+      tags: [Projects]
+      summary: Get project details
+      description: >
+        Returns full details of a single project.
+        Requires the caller to be an admin, the project owner, or a member.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Project details fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Project details fetched successfully
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden – not a project member/owner/admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    patch:
+      tags: [Projects]
+      summary: Update project
+      description: >
+        Updates `title`, `description`, `status`, or `members`.
+        Only the project owner or an admin may call this endpoint.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 3
+                  example: Implement User Authentication V2
+                description:
+                  type: string
+                  minLength: 10
+                  example: Extended authentication module with OAuth support.
+                status:
+                  $ref: '#/components/schemas/ProjectStatus'
+                members:
+                  type: array
+                  items:
+                    type: string
+                  example: [6a0eec0c5a0dabe0d64ad30b]
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Project updated successfully
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    delete:
+      tags: [Projects]
+      summary: Delete project
+      description: Permanently deletes the project. Only the project owner or an admin may do this.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Project deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Project deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /projects/{projectId}/toggle-status:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1d9263a8f99944ba070066
+    patch:
+      tags: [Projects]
+      summary: Toggle project status
+      description: >
+        Changes the project's status to `active` or `archived`.
+        Only the project owner or an admin may call this.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  $ref: '#/components/schemas/ProjectStatus'
+            example:
+              status: archived
+      responses:
+        '200':
+          description: Project status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Project status updated to archived successfully
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /projects/{projectId}/members:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1dd82d6f4465a0db5af2fa
+ 
+    get:
+      tags: [Projects]
+      summary: Get project members
+      description: Returns all members of the project. Only the owner or an admin may call this.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Project members fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Project members fetched successfully
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    post:
+      tags: [Projects]
+      summary: Add members to project
+      description: Adds one or more users to the project's member list. Only the owner or an admin may call this.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberIds]
+              properties:
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                  example: [6a0eec205a0dabe0d64ad30a, 6a0eec0c5a0dabe0d64ad30b]
+      responses:
+        '201':
+          description: Member(s) added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: Member added successfully
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /projects/{projectId}/members/{memberId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1dd82d6f4465a0db5af2fa
+      - name: memberId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a0eec205a0dabe0d64ad30a
+    delete:
+      tags: [Projects]
+      summary: Remove a member from the project
+      description: Removes the specified user from the project. Only the owner or an admin may call this.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Member removed successfully
+                  project:
+                    $ref: '#/components/schemas/Project'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project or member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  # ══════════════════════════════════════════════════════════
+  # TASKS
+  # ══════════════════════════════════════════════════════════
+ 
+  /projects/{projectId}/tasks:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1d9263a8f99944ba070066
+ 
+    post:
+      tags: [Tasks]
+      summary: Create a task in a project
+      description: >
+        Creates a task associated with the given project. The caller must be an
+        admin, the project owner, or a member (`ProjectAccessGuard`).
+        `assignedTo` is optional.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description, priority, dueDate, projectId]
+              properties:
+                title:
+                  type: string
+                  minLength: 5
+                  example: Add Activity Logging
+                description:
+                  type: string
+                  maxLength: 300
+                  example: Track user actions such as project creation, task updates, and member invitations.
+                priority:
+                  $ref: '#/components/schemas/TaskPriority'
+                dueDate:
+                  type: string
+                  format: date-time
+                  example: '2026-04-05T00:00:00.000Z'
+                projectId:
+                  type: string
+                  example: 6a1d9263a8f99944ba070066
+                assignedTo:
+                  type: string
+                  example: 6a0eec0c5a0dabe0d64ad30b
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: Task created successfully
+                  task:
+                    $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    get:
+      tags: [Tasks]
+      summary: Get all tasks for a project
+      description: >
+        Returns a paginated list of tasks for the project.
+        Supports filtering by `status`, `priority`, `assignedTo`, and full-text `search`.
+        Caller must be an admin, the project owner, or a member.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 5
+          example: 5
+        - name: search
+          in: query
+          schema:
+            type: string
+          example: activity
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: priority
+          in: query
+          schema:
+            $ref: '#/components/schemas/TaskPriority'
+        - name: assignedTo
+          in: query
+          schema:
+            type: string
+          example: 6a0eec0c5a0dabe0d64ad30b
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: createdAt
+          example: dueDate
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Tasks fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Tasks for this project fetched successfully
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /projects/{projectId}/tasks/{taskId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1d9263a8f99944ba070066
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1dc57109714d00e4dd6ee1
+ 
+    get:
+      tags: [Tasks]
+      summary: Get task details
+      description: >
+        Returns full details of a single task.
+        Requires the caller to be an admin, the task creator, or the assignee
+        (and also a project member/owner).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Task fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Task fetched successfully
+                  task:
+                    $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Task or project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    patch:
+      tags: [Tasks]
+      summary: Update task
+      description: >
+        Updates one or more fields of a task. All fields are optional.
+        Caller must be an admin, the task creator, or the assignee (`TaskAccessGuard`).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  minLength: 5
+                  example: Add Activity Logging V2
+                description:
+                  type: string
+                  maxLength: 300
+                  example: Extended activity tracking including login events.
+                priority:
+                  $ref: '#/components/schemas/TaskPriority'
+                status:
+                  $ref: '#/components/schemas/TaskStatus'
+                dueDate:
+                  type: string
+                  format: date-time
+                  example: '2026-05-01T00:00:00.000Z'
+                assignedTo:
+                  type: string
+                  example: 6a0eec0c5a0dabe0d64ad30b
+                projectId:
+                  type: string
+                  example: 6a1d9263a8f99944ba070066
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Task updated successfully
+                  task:
+                    $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Task or project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    delete:
+      tags: [Tasks]
+      summary: Delete task
+      description: >
+        Permanently deletes the task.
+        Caller must be an admin, the task creator, or the assignee.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Task deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Task deleted successfully
+                  deletedTask:
+                    $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Task or project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /projects/{projectId}/tasks/{taskId}/assign-task:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a0ff21140e7ecfd38b01404
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1d982ed1c2047ace95a4b7
+    patch:
+      tags: [Tasks]
+      summary: Assign a task to a user
+      description: >
+        Assigns the task to the specified user (`assigneeId`).
+        Only the project owner or an admin may call this (`ProjectOwnerOrAdminGuard`).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assigneeId, projectId]
+              properties:
+                assigneeId:
+                  type: string
+                  example: 6a0eec0c5a0dabe0d64ad30b
+                projectId:
+                  type: string
+                  example: 6a0ff21140e7ecfd38b01404
+      responses:
+        '200':
+          description: Task assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Task assigned successfully
+                  task:
+                    $ref: '#/components/schemas/Task'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden – not the project owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Task or project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /projects/{projectId}/tasks/{taskId}/unassign-task:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a0ff21140e7ecfd38b01404
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1d982ed1c2047ace95a4b7
+    delete:
+      tags: [Tasks]
+      summary: Unassign a task
+      description: >
+        Removes the current assignee from the task.
+        Only the project owner or an admin may call this.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Task unassigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Task un-assigned successfully
+                  task:
+                    $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Task or project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+  
+  # ══════════════════════════════════════════════════════════
+  # COMMENTS  (nested under /tasks/:taskId/comments)
+  # ══════════════════════════════════════════════════════════
+  /tasks/{taskId}/comments:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1dc57109714d00e4dd6ee1
+ 
+    post:
+      tags: [Comments]
+      summary: Create a comment on a task
+      description: Adds a new comment authored by the authenticated user.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                  example: Looks good, merging now.
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 201
+                  message:
+                    type: string
+                    example: Comment created successfully
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    get:
+      tags: [Comments]
+      summary: Get all comments for a task
+      description: Returns every comment associated with the given task.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Comments fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Comments fetched successfully
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+  /tasks/{taskId}/comments/{id}:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1dc57109714d00e4dd6ee1
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        example: 6a1df2921ce3c86113503399
+ 
+    get:
+      tags: [Comments]
+      summary: Get a single comment
+      description: Returns details of one comment by its ID.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Comment fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Comment fetched successfully
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '404':
+          description: Comment or task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    patch:
+      tags: [Comments]
+      summary: Update a comment
+      description: >
+        Updates the content of an existing comment.
+        Only the comment author may do this (`CheckOwnerShip('Comment')` guard).
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 3
+                  maxLength: 200
+                  example: Updated comment content here.
+      responses:
+        '200':
+          description: Comment updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Comment updated successfully
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden – not the comment author
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Comment or task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+ 
+    delete:
+      tags: [Comments]
+      summary: Delete a comment
+      description: >
+        Permanently deletes the comment.
+        Only the comment author may do this (`CheckOwnerShip('Comment')` guard).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Comment deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: Comment deleted successfully
+                  data:
+                    type: object
+                    nullable: true
+                    example: null
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+        '403':
+          description: Forbidden – not the comment author
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForbiddenError'
+        '404':
+          description: Comment or task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
