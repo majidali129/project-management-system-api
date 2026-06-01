@@ -20,8 +20,9 @@ import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { ProjectAccessGuard } from 'src/projects/guards/project-access.guard';
 import type { Request } from 'express';
 import { TaskAccessGuard } from './guards/task-access-guard';
+import { ProjectOwnerOrAdminGuard } from 'src/projects/guards/project-owner-admin.guard';
 
-@Controller('tasks')
+@Controller('projects/:projectId/tasks')
 @UseGuards(AuthGuard)
 export class TasksController {
   constructor(private readonly taskService: TasksService) {}
@@ -38,16 +39,16 @@ export class TasksController {
     };
   }
 
-  @Patch(':id')
+  @Patch(':taskId')
   @UseGuards(TaskAccessGuard)
   async updateTask(
     @Req() req: Request,
     @Body() dto: UpdateTaskDto,
-    @Param('id') id: string,
+    @Param('taskId') taskId: string,
   ) {
     const updatedTask = await this.taskService.updateTask(
       dto,
-      id,
+      taskId,
       req.project._id.toString(),
     );
     return {
@@ -58,8 +59,8 @@ export class TasksController {
     };
   }
 
-  @Get(':id')
-  @UseGuards(TaskAccessGuard)
+  @Get(':taskId')
+  @UseGuards(ProjectAccessGuard, TaskAccessGuard)
   getTaskDetails(@Req() req: Request) {
     return {
       success: true,
@@ -69,10 +70,10 @@ export class TasksController {
     };
   }
 
-  @Delete(':id')
-  @UseGuards(TaskAccessGuard)
-  async deleteTask(@Req() req: Request, @Param('id') id: string) {
-    const deletedTask = await this.taskService.deleteTask(id, req.user);
+  @Delete(':taskId')
+  @UseGuards(ProjectAccessGuard, TaskAccessGuard)
+  async deleteTask(@Req() req: Request, @Param('taskId') taskId: string) {
+    const deletedTask = await this.taskService.deleteTask(taskId, req.user);
 
     return {
       success: true,
@@ -82,13 +83,18 @@ export class TasksController {
     };
   }
 
-  @Patch(':id/assign-task')
+  @Patch(':taskId/assign-task')
+  @UseGuards(ProjectOwnerOrAdminGuard)
   async assignTask(
-    @Param('id') id: string,
+    @Param('taskId') taskId: string,
     @Req() req: Request,
     @Body() dto: AssignTaskDto,
   ) {
-    const assignedTask = await this.taskService.assignTask(id, dto, req.user);
+    const assignedTask = await this.taskService.assignTask(
+      taskId,
+      dto,
+      req.user,
+    );
     return {
       success: true,
       status: HttpStatus.OK,
@@ -97,9 +103,10 @@ export class TasksController {
     };
   }
 
-  @Delete(':id/unassign-task')
-  async unAssignTask(@Param('id') id: string) {
-    const updatedTask = await this.taskService.unAssign(id);
+  @Delete(':taskId/unassign-task')
+  @UseGuards(ProjectOwnerOrAdminGuard)
+  async unAssignTask(@Param('taskId') taskId: string) {
+    const updatedTask = await this.taskService.unAssign(taskId);
     return {
       success: true,
       status: HttpStatus.OK,

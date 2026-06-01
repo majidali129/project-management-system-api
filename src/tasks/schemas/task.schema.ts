@@ -19,7 +19,7 @@ export type TaskDocument = HydratedDocument<Task>;
 export class Task {
   @Prop({
     required: [true, 'Title is required'],
-    minlength: [5, 'Title must be 5 characters long'],
+    minlength: [5, 'Title must be at least 5 characters long'],
   })
   title: string;
 

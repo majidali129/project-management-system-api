@@ -12,14 +12,14 @@ import { TaskPriority } from '../types/task-priority';
 
 export class CreateTaskDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Title is required' })
   @MinLength(5, {
-    message: 'Title must be 5 characters long',
+    message: 'Title must be at least 5 characters long',
   })
   title: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Description is required' })
   @MaxLength(300, {
     message: 'Description cannot exceeds 300 characters',
   })
@@ -28,11 +28,11 @@ export class CreateTaskDto {
   @IsEnum(TaskPriority, {
     message: `Task priority could be either ${Object.values(TaskPriority).join(', ')}`,
   })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Priority is required' })
   priority: TaskPriority;
 
   @IsDateString({}, { message: 'dueDate must be a valid ISO date string' })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Due date is required' })
   dueDate: string;
 
   @IsMongoId({ message: 'assignedTo must be a valid MongoDB ObjectId' })
@@ -40,6 +40,6 @@ export class CreateTaskDto {
   assignedTo?: string;
 
   @IsMongoId({ message: 'projectId must be a valid MongoDB ObjectId' })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Project ID is required' })
   projectId: string;
 }

@@ -15,8 +15,7 @@ export class TaskAccessGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext) {
     const req: Request = ctx.switchToHttp().getRequest();
     const user = req.user;
-    const taskId = req.params.id as string;
-
+    const taskId = req.params.taskId as string;
     if (!taskId) return true;
 
     const task = await this.taskModel.findById(taskId).lean().exec();

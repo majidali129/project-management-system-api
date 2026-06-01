@@ -16,7 +16,12 @@ export class ProjectOwnerOrAdminGuard implements CanActivate {
   ) {}
   async canActivate(ctx: ExecutionContext) {
     const req: Request = ctx.switchToHttp().getRequest();
-    const projectId = req.params.id as string;
+    const params = req.params;
+    const body = req.body as Record<string, any>;
+    const projectIdFromParams =
+      (params?.projectId as string) || (params?.id as string);
+    const projectIdFromBody = body?.projectId as string;
+    const projectId = projectIdFromParams || projectIdFromBody;
     const user = req.user;
 
     if (!projectId) return true;

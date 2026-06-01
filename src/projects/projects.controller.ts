@@ -50,14 +50,14 @@ export class ProjectsController {
     };
   }
 
-  @Patch(':id')
+  @Patch(':projectId')
   @UseGuards(ProjectOwnerOrAdminGuard)
   async updateProject(
     @Body() updateProjectDto: UpdateProjectDto,
-    @Param('id') id: string,
+    @Param('projectId') projectId: string,
   ) {
     const updatedProject = await this.projectService.updateProject(
-      id,
+      projectId,
       updateProjectDto,
     );
 
@@ -69,14 +69,14 @@ export class ProjectsController {
     };
   }
 
-  @Patch(':id/toggle-status')
+  @Patch(':projectId/toggle-status')
   @UseGuards(ProjectOwnerOrAdminGuard)
   async toggleProjectStatus(
-    @Param('id') id: string,
+    @Param('projectId') projectId: string,
     @Body() updateProjectStatusDto: UpdateProjectStatusDto,
   ) {
     const updatedProject = await this.projectService.toggleProjectStatus(
-      id,
+      projectId,
       updateProjectStatusDto,
     );
 
@@ -90,20 +90,31 @@ export class ProjectsController {
 
   @Get()
   async getAllProjects(@User() user: AuthorizedUser) {
-    return this.projectService.getAllProjects(user);
+    const projects = await this.projectService.getAllProjects(user);
+    return {
+      success: true,
+      status: HttpStatus.OK,
+      message: 'Projects fetched successfully',
+      projects,
+    };
   }
 
-  // Owner | Admin | Project-Member
-  @Get(':id')
+  @Get(':projectId')
   @UseGuards(ProjectAccessGuard)
-  async getProjectDetails(@Param('id') id: string) {
-    return await this.projectService.getProjectDetails(id);
+  async getProjectDetails(@Param('projectId') projectId: string) {
+    const project = await this.projectService.getProjectDetails(projectId);
+    return {
+      success: true,
+      status: HttpStatus.OK,
+      message: 'Project details fetched successfully',
+      project,
+    };
   }
 
-  @Get(':id/members')
+  @Get(':projectId/members')
   @UseGuards(ProjectOwnerOrAdminGuard)
-  async getProjectMembers(@Param('id') id: string) {
-    const members = await this.projectService.getProjectMembers(id);
+  async getProjectMembers(@Param('projectId') projectId: string) {
+    const members = await this.projectService.getProjectMembers(projectId);
     return {
       success: true,
       status: HttpStatus.OK,
@@ -112,14 +123,14 @@ export class ProjectsController {
     };
   }
 
-  @Post(':id/members')
+  @Post(':projectId/members')
   @UseGuards(ProjectOwnerOrAdminGuard)
   async addProjectMemebers(
-    @Param('id') id: string,
+    @Param('projectId') projectId: string,
     @Body() addMembersDto: AddProjectMembersDto,
   ) {
     const project = await this.projectService.addProjectMemebers(
-      id,
+      projectId,
       addMembersDto,
     );
 
@@ -131,13 +142,16 @@ export class ProjectsController {
     };
   }
 
-  @Delete(':id/members/:memberId')
+  @Delete(':projectId/members/:memberId')
   @UseGuards(ProjectOwnerOrAdminGuard)
   async removeProjectMember(
-    @Param('id') id: string,
+    @Param('projectId') projectId: string,
     @Param('memberId') memberId: string,
   ) {
-    const project = await this.projectService.removeProjectMember(id, memberId);
+    const project = await this.projectService.removeProjectMember(
+      projectId,
+      memberId,
+    );
     return {
       success: true,
       status: HttpStatus.OK,
@@ -146,10 +160,10 @@ export class ProjectsController {
     };
   }
 
-  @Delete(':id')
+  @Delete(':projectId')
   @UseGuards(ProjectOwnerOrAdminGuard)
-  async deleteProject(@Param('id') id: string) {
-    await this.projectService.deleteProject(id);
+  async deleteProject(@Param('projectId') projectId: string) {
+    await this.projectService.deleteProject(projectId);
 
     return {
       success: true,
@@ -158,14 +172,18 @@ export class ProjectsController {
     };
   }
 
-  @Get(':id/tasks')
+  @Get(':projectId/tasks')
   @UseGuards(ProjectAccessGuard)
   async getProjectTasks(
-    @Param('id') id: string,
+    @Param('projectId') projectId: string,
     @User() user: AuthorizedUser,
     @Query(new ValidationPipe({ transform: true })) query: GetTasksQueryDto,
   ) {
-    const tasks = await this.taskService.getProjectTasks(id, user, query);
+    const tasks = await this.taskService.getProjectTasks(
+      projectId,
+      user,
+      query,
+    );
     return {
       success: true,
       status: HttpStatus.OK,

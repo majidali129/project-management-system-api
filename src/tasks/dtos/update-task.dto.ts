@@ -1,6 +1,7 @@
 import {
-  IsDate,
+  IsDateString,
   IsEnum,
+  IsMongoId,
   IsOptional,
   IsString,
   MaxLength,
@@ -13,7 +14,7 @@ export class UpdateTaskDto {
   @IsString()
   @IsOptional()
   @MinLength(5, {
-    message: 'Title must be 5 characters long',
+    message: 'Title must be at least 5 characters long',
   })
   title?: string;
 
@@ -36,15 +37,15 @@ export class UpdateTaskDto {
   @IsOptional()
   status?: TaskStatus;
 
-  @IsDate()
+  @IsDateString({}, { message: 'dueDate must be a valid ISO date string' })
   @IsOptional()
   dueDate?: Date;
 
-  @IsString()
+  @IsMongoId({ message: 'assignedTo must be a valid MongoDB ObjectId' })
   @IsOptional()
   assignedTo?: string;
 
-  @IsString()
+  @IsMongoId({ message: 'projectId must be a valid MongoDB ObjectId' })
   @IsOptional()
   projectId?: string;
 }

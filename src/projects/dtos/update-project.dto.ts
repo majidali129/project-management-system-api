@@ -10,11 +10,12 @@ import { ProjectStatus } from 'src/projects/types/project-status';
 export class UpdateProjectDto {
   @IsString()
   @IsOptional()
-  @MinLength(3)
+  @MinLength(3, { message: 'Title must be at least 3 characters long' })
   title?: string;
 
   @IsString()
   @IsOptional()
+  @MinLength(10, { message: 'Description must be at least 10 characters long' })
   description?: string;
 
   @IsEnum(ProjectStatus, {

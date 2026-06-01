@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Model, Types } from 'mongoose';
 import { Project } from './schemas/project.schema';
 import { CreateProjectDto } from './dtos/create-project.dto';
@@ -17,7 +21,7 @@ export class ProjectsService {
   async createProject(userId: string, createProjectDto: CreateProjectDto) {
     return this.projectModel.create({
       ...createProjectDto,
-      ownerId: userId,
+      ownerId: new Types.ObjectId(userId),
     });
   }
 
@@ -53,9 +57,9 @@ export class ProjectsService {
     if (user.role !== Role.admin) {
       authFilters = {
         $or: [
-          { ownerId: user.id },
+          { ownerId: new Types.ObjectId(user.id) },
           {
-            members: { $in: [user.id] },
+            members: { $in: [new Types.ObjectId(user.id)] },
           },
         ],
       };
@@ -80,11 +84,25 @@ export class ProjectsService {
       throw new NotFoundException('Project not found or no longer exits.');
     }
 
+    const existingMemberIds = project.members.map((member) =>
+      member.toString(),
+    );
+    const duplicateMemberIds = addMembersDto.memberIds.filter((id) =>
+      existingMemberIds.includes(id),
+    );
+
+    if (duplicateMemberIds.length > 0) {
+      throw new BadRequestException(
+        `Members already exist in project: ${duplicateMemberIds.join(', ')}`,
+      );
+    }
     return await this.projectModel.findByIdAndUpdate(
       projectId,
       {
-        $set: {
-          members: [...project.members, ...addMembersDto.memberIds],
+        $addToSet: {
+          members: {
+            $each: addMembersDto.memberIds.map((id) => new Types.ObjectId(id)),
+          },
         },
       },
       { returnDocument: 'after' },
@@ -96,11 +114,21 @@ export class ProjectsService {
     if (!project)
       throw new NotFoundException('Project not found or hase been deleted');
 
+    const isMemberExist = project.members.some(
+      (member) => member.toString() === memberId,
+    );
+
+    if (!isMemberExist) {
+      throw new NotFoundException(
+        'Member not found in the project OR already removed',
+      );
+    }
+
     return this.projectModel.findByIdAndUpdate(
       projectId,
       {
         $pull: {
-          members: memberId,
+          members: new Types.ObjectId(memberId),
         },
       },
       { returnDocument: 'after' },
@@ -117,6 +145,7 @@ export class ProjectsService {
         avatar: string;
       }[];
     }
+
     const projectMembers = await this.projectModel.aggregate<AggregatedProject>(
       [
         {
@@ -134,12 +163,13 @@ export class ProjectsService {
         },
         {
           $project: {
+            _id: 1,
             members: {
               $map: {
                 input: '$pMembers',
                 as: 'member',
                 in: {
-                  id: '$$member._id',
+                  id: { $toString: '$$member._id' },
                   name: '$$member.name',
                   email: '$$member.email',
                   avatar: '$$member.avatar',

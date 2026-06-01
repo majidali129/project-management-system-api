@@ -17,7 +17,11 @@ export class ProjectAccessGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext) {
     const req: Request = ctx.switchToHttp().getRequest();
     const user = req.user;
-    const projectId = req.params.id;
+    // Check if projectId is provided in either params or body
+    const body = req.body as Record<string, any>;
+    const projectIdFromParams = req.params.projectId as string;
+    const projectIdFromBody = body?.projectId as string;
+    const projectId = projectIdFromParams ?? projectIdFromBody;
 
     if (!projectId) return true;
 
@@ -33,7 +37,7 @@ export class ProjectAccessGuard implements CanActivate {
 
     if (!isAdmin && !isOwner && !isMember) {
       throw new ForbiddenException(
-        'Access denied: You are not authorized to view this project details',
+        'Access denied: You are not authorized to perform this action',
       );
     }
 

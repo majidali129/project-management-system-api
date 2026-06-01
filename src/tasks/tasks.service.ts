@@ -84,7 +84,7 @@ export class TasksService {
 
     if (user.role !== Role.admin) {
       matchCriteria.$or = [
-        { ownerId: new Types.ObjectId(user.id) },
+        { createdBy: new Types.ObjectId(user.id) },
         { assignedTo: new Types.ObjectId(user.id) },
       ];
     }
@@ -157,7 +157,7 @@ export class TasksService {
 
   async deleteTask(taskId: string, user: AuthorizedUser) {
     const task = await this.getTaskById(taskId);
-    if (task.assignedTo.toString() === user.id) {
+    if (task.assignedTo && task.assignedTo.toString() === user.id) {
       throw new ForbiddenException(
         'Access denied: Only Admins or Task creator can delete a task',
       );
@@ -221,7 +221,10 @@ export class TasksService {
   }
 
   async getTaskById(id: string) {
-    const task = await this.taskModel.findOne({ _id: id }).lean().exec();
+    const task = await this.taskModel
+      .findOne({ _id: new Types.ObjectId(id) })
+      .lean()
+      .exec();
     if (!task)
       throw new NotFoundException('Task not found or has already been deleted');
     return task;

@@ -10,23 +10,23 @@ import { Role } from 'src/shared/types/role';
 
 export class CreateUserDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Name is required' })
   name: string;
 
   @IsString()
-  @IsNotEmpty()
-  @IsEmail()
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: 'Email must be a valid email address' })
   email: string;
 
   @IsString()
-  @IsNotEmpty()
-  @MinLength(8)
+  @IsNotEmpty({ message: 'Password is required' })
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
   password: string;
 
   @IsEnum(Role, {
     message: `Role must be one of admin or user`,
   })
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Role is required' })
   role: Role;
 
   @IsString()
