@@ -17,11 +17,11 @@ export class ProjectAccessGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext) {
     const req: Request = ctx.switchToHttp().getRequest();
     const user = req.user;
-    const projectId = req.params.id as string;
+    const projectId = req.params.id;
 
     if (!projectId) return true;
 
-    const project = await this.projectModel.findById(projectId).exec();
+    const project = await this.projectModel.findById(projectId).lean().exec();
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -33,7 +33,7 @@ export class ProjectAccessGuard implements CanActivate {
 
     if (!isAdmin && !isOwner && !isMember) {
       throw new ForbiddenException(
-        'Access denied: You are not authorized to view this project',
+        'Access denied: You are not authorized to view this project details',
       );
     }
 

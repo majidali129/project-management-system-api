@@ -20,13 +20,13 @@ export class ProjectOwnerOrAdminGuard implements CanActivate {
     const user = req.user;
 
     if (!projectId) return true;
-    const project = await this.projectModel.findById(projectId).exec();
+    const project = await this.projectModel.findById(projectId).lean().exec();
     if (!project) throw new NotFoundException('Project not found');
     const isOwner = project.ownerId.toString() === user.id;
     const isAdmin = user.role === Role.admin;
     if (!isAdmin && !isOwner) {
       throw new ForbiddenException(
-        'You do not have permission to modify this project',
+        'You do not have permission to perform this action',
       );
     }
     req['project'] = project;

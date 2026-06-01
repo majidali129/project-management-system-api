@@ -7,7 +7,9 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import { CreateProjectDto } from './dtos/create-project.dto';
 import { ProjectsService } from './projects.service';
@@ -19,11 +21,16 @@ import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { AddProjectMembersDto } from './dtos/add-project-members.dto';
 import { ProjectOwnerOrAdminGuard } from './guards/project-owner-admin.guard';
 import { ProjectAccessGuard } from './guards/project-access.guard';
+import { TasksService } from 'src/tasks/tasks.service';
+import { GetTasksQueryDto } from './dtos/get-tasks-query.dto';
 
 @Controller('projects')
 @UseGuards(AuthGuard)
 export class ProjectsController {
-  constructor(private readonly projectService: ProjectsService) {}
+  constructor(
+    private readonly projectService: ProjectsService,
+    private readonly taskService: TasksService,
+  ) {}
 
   @Post()
   async createProject(
@@ -106,6 +113,7 @@ export class ProjectsController {
   }
 
   @Post(':id/members')
+  @UseGuards(ProjectOwnerOrAdminGuard)
   async addProjectMemebers(
     @Param('id') id: string,
     @Body() addMembersDto: AddProjectMembersDto,
@@ -147,6 +155,22 @@ export class ProjectsController {
       success: true,
       status: HttpStatus.OK,
       message: 'Project deleted successfully',
+    };
+  }
+
+  @Get(':id/tasks')
+  @UseGuards(ProjectAccessGuard)
+  async getProjectTasks(
+    @Param('id') id: string,
+    @User() user: AuthorizedUser,
+    @Query(new ValidationPipe({ transform: true })) query: GetTasksQueryDto,
+  ) {
+    const tasks = await this.taskService.getProjectTasks(id, user, query);
+    return {
+      success: true,
+      status: HttpStatus.OK,
+      message: 'Tasks for this project fetched successfully',
+      tasks,
     };
   }
 }
