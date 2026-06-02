@@ -2,7 +2,6 @@ import {
   IsEmail,
   IsEnum,
   IsNotEmpty,
-  IsOptional,
   IsString,
   MinLength,
 } from 'class-validator';
@@ -28,8 +27,4 @@ export class CreateUserDto {
   })
   @IsNotEmpty({ message: 'Role is required' })
   role: Role;
-
-  @IsString()
-  @IsOptional()
-  avatar?: string;
 }

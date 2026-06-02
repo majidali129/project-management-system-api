@@ -15,6 +15,7 @@ import { canAssign } from './utils/can-assign';
 import { ProjectsService } from 'src/projects/projects.service';
 import { Role } from 'src/shared/types/role';
 import { GetTasksQueryDto } from 'src/projects/dtos/get-tasks-query.dto';
+import { CloudinaryService } from 'src/uploads/cloudinary/cloudinary.service';
 
 export interface AggregatedTaskResult {
   id: string;
@@ -43,6 +44,7 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<Task>,
     private readonly projectService: ProjectsService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   async createTask(dto: CreateTaskDto, userId: string) {
@@ -218,6 +220,30 @@ export class TasksService {
         returnDocument: 'after',
       },
     );
+  }
+
+  async addAttachmentToTask(taskId: string, file: Express.Multer.File) {
+    const task = await this.taskModel.findById(taskId).exec();
+    if (!task) throw new NotFoundException('Task not found');
+
+    if (task.attachment && task.attachment.publicId) {
+      await this.cloudinaryService.destroyFile(task.attachment.publicId);
+    }
+
+    const result = await this.cloudinaryService.uploadAttachment(file);
+
+    const updatedTask = await this.taskModel.findByIdAndUpdate(
+      taskId,
+      {
+        $set: {
+          'attachment.url': result.secure_url,
+          'attachment.publicId': result.public_id,
+        },
+      },
+      { returnDocument: 'after' },
+    );
+
+    return updatedTask;
   }
 
   async getTaskById(id: string) {

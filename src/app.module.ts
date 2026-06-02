@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ProjectsModule } from './projects/projects.module';
 import { TasksModule } from './tasks/tasks.module';
 import { CommentsModule } from './comments/comments.module';
+import { CloudinaryModule } from './uploads/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CommentsModule } from './comments/comments.module';
     ProjectsModule,
     TasksModule,
     CommentsModule,
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

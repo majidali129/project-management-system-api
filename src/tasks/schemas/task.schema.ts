@@ -74,6 +74,17 @@ export class Task {
     ref: 'User',
   })
   createdBy: Types.ObjectId;
+
+  @Prop({
+    type: {
+      url: { type: String, required: true },
+      publicId: { type: String, required: true },
+    },
+  })
+  attachment?: {
+    url: string;
+    publicId: string;
+  };
 }
 
 export const TaskSchema = SchemaFactory.createForClass(Task);

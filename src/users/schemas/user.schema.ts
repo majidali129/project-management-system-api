@@ -41,8 +41,16 @@ export class User {
   })
   role: Role;
 
-  @Prop({ type: String })
-  avatar?: string;
+  @Prop({
+    type: {
+      url: { type: String, required: true },
+      publicId: { type: String, required: true },
+    },
+  })
+  avatar?: {
+    url: string;
+    publicId: string;
+  };
 
   @Prop({ type: String })
   refreshToken?: string;
