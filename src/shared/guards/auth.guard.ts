@@ -18,6 +18,7 @@ export class AuthGuard implements CanActivate {
   ) {}
   async canActivate(ctx: ExecutionContext) {
     const req: Request = ctx.switchToHttp().getRequest();
+    // We're checking headers for mobile clients that might not support cookies
     const token =
       (req.cookies['accessToken'] as string) ||
       (req.headers['authorization']?.replace('Bearer ', '') as string);

@@ -2,13 +2,18 @@ import {
   Body,
   Controller,
   Delete,
+  FileTypeValidator,
   Get,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
+  ParseFilePipe,
   Patch,
   Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dtos/create-task.dto';
@@ -21,6 +26,7 @@ import { ProjectAccessGuard } from 'src/projects/guards/project-access.guard';
 import type { Request } from 'express';
 import { TaskAccessGuard } from './guards/task-access-guard';
 import { ProjectOwnerOrAdminGuard } from 'src/projects/guards/project-owner-admin.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('projects/:projectId/tasks')
 @UseGuards(AuthGuard)
@@ -111,6 +117,40 @@ export class TasksController {
       success: true,
       status: HttpStatus.OK,
       message: `Task un-ssigned successfully`,
+      task: updatedTask,
+    };
+  }
+
+  @Patch(':taskId/attatchment')
+  @UseInterceptors(FileInterceptor('attachment'))
+  @UseGuards(TaskAccessGuard)
+  async addAttachment(
+    @Param('taskId') taskId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: 1024 * 1024 * 5,
+            errorMessage: 'Attachment size cannot exceed 5MB',
+          }),
+          new FileTypeValidator({
+            fileType: /(pdf|docx|msword|openxmlformats)/,
+          }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const updatedTask = await this.taskService.addAttachmentToTask(
+      taskId,
+      file,
+    );
+
+    return {
+      success: true,
+      status: HttpStatus.OK,
+      message: 'Attachment uploaded successfully',
       task: updatedTask,
     };
   }

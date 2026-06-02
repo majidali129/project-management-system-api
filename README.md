@@ -34,6 +34,7 @@ A production-ready RESTful API built with NestJS, TypeScript, MongoDB, and Mongo
 - Unassign tasks
 - Track task status
 - Track task priority
+- Add attachement to task
 
 ### Comments System
 
@@ -80,12 +81,11 @@ src/
 ├── projects/             # Project management
 ├── tasks/                # Task management
 ├── comments/             # Comment management
+├── uploads/             # File upload management
 │
 ├── common/
 │   ├── guards/           # Authorization guards
 │   ├── decorators/       # Custom decorators
-│   ├── filters/          # Exception filters
-│   ├── interceptors/     # Response interceptors
 │   └── pipes/            # Validation pipes
 │
 ├── config/               # Application configuration
@@ -147,6 +147,9 @@ REFRESH_TOKEN_SECRET=your_refresh_token_secret
 REFRESH_TOKEN_EXPIRY=7d
 DEFAULT_LIMIT=5
 DEFAULT_PAGE=1
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 
 ```
 
@@ -385,6 +388,7 @@ Common HTTP status codes used by the API:
 | 401         | Unauthorized       |
 | 403         | Forbidden          |
 | 404         | Resource Not Found |
+| 500         | Server Error       |
 
 Example validation error:
 
@@ -408,6 +412,7 @@ Example validation error:
 - Sign Up
 - Login
 - Logout
+- Refresh Tokens
 
 ### Projects
 
@@ -418,6 +423,7 @@ Example validation error:
 - Delete Project
 - Toggle Status
 - Add Members
+- Get Members
 - Remove Members
 
 ### Tasks
@@ -429,6 +435,7 @@ Example validation error:
 - Delete Task
 - Assign Task
 - Unassign Task
+- Add attachment
 
 ### Comments
 

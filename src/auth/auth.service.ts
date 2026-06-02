@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   HttpStatus,
   Injectable,
   UnauthorizedException,
@@ -8,12 +9,13 @@ import { UsersService } from 'src/users/users.service';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { LoginUserDto } from './dtos/login-user.dto';
 import bcrypt from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
+import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { User } from 'src/users/schemas/user.schema';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Role } from 'src/shared/types/role';
+import { CloudinaryService } from 'src/uploads/cloudinary/cloudinary.service';
 
 @Injectable()
 export class AuthService {
@@ -21,10 +23,11 @@ export class AuthService {
     private readonly userService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly cloudinaryService: CloudinaryService,
     @InjectModel(User.name) private userModel: Model<User>,
   ) {}
-  async signUp(createUserDto: CreateUserDto) {
-    const { name, email, password, role, avatar } = createUserDto;
+  async signUp(createUserDto: CreateUserDto, file: Express.Multer.File) {
+    const { name, email, password, role } = createUserDto;
 
     const existingUser = await this.userModel
       .findOne({ email: createUserDto.email })
@@ -36,15 +39,21 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    //TODO: 4. Call Upload Service Save avatar to file-system and url back for DB
-
-    await this.userModel.create({
+    const createdUser = await this.userModel.create({
       name,
       email,
       password: hashedPassword,
       role,
-      avatar,
     });
+
+    const result = await this.cloudinaryService.uploadAvatar(file);
+
+    createdUser.avatar = {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+
+    await createdUser.save({ validateBeforeSave: false });
 
     //TODO: 5. Call Email Sercice to Send email for verification ( Optional )
     return {
@@ -88,9 +97,65 @@ export class AuthService {
     await user.save({ validateBeforeSave: false });
   }
 
-  refreshToken() {
-    // 1. If Client is Browser or any that support cookies, we'll get both ( access and refresh ) from cookies then based on that or req.user we'll get user from db for refreshToken from DB. Now if refreshToken still valid  => we'll renew both access+refresh and return new ones and save new ones. If refreshToken expired or compomised => this req will fails as unauthorized and user'll have to login again.
-    // 2. If Client is API client PostMan or mobile => we'll use bearer/authorization headers for accessToken => we'll get accessToken from headers => renew the accessToken as per count limit. if exceeds, we'll aks for login.
+  async processRefreshToken(refreshToken: string) {
+    if (!refreshToken) throw new UnauthorizedException('Refresh token missing');
+    try {
+      const decoded: { sub: string } = await this.jwtService.verifyAsync(
+        refreshToken,
+        {
+          secret: this.configService.get<string>('REFRESH_TOKEN_SECRET'),
+        },
+      );
+
+      const user = await this.userModel
+        .findOne({
+          _id: new Types.ObjectId(decoded.sub),
+          refreshToken: { $ne: null },
+        })
+        .exec();
+
+      if (!user)
+        throw new UnauthorizedException('User account is inactive or missing');
+
+      const isRefreshTokenValid = await bcrypt.compare(
+        refreshToken,
+        user.refreshToken || '',
+      );
+
+      if (!isRefreshTokenValid)
+        throw new UnauthorizedException(
+          'Invalid refresh token or refresh token has been revoked',
+        );
+
+      const accessToken = await this.generateAccessToken({
+        sub: user._id.toString(),
+        role: user.role,
+        email: user.email,
+      });
+
+      const newRefreshToken = await this.generateRefreshToken({
+        sub: user._id.toString(),
+      });
+
+      const hashedRefreshToken = await bcrypt.hash(newRefreshToken, 12);
+      user.refreshToken = hashedRefreshToken;
+      await user.save({ validateBeforeSave: false });
+
+      return { accessToken, refreshToken: newRefreshToken };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (error instanceof TokenExpiredError)
+        throw new UnauthorizedException(
+          'Refresh token expired. Please login again',
+        );
+
+      if (error instanceof JsonWebTokenError)
+        throw new UnauthorizedException(
+          'Invalid or malformed authentication token',
+        );
+
+      throw new UnauthorizedException('Could not refresh authentication token');
+    }
   }
 
   async generateAccessToken(payload: {

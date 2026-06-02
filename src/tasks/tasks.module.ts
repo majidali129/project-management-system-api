@@ -4,6 +4,7 @@ import { TasksService } from './tasks.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Task, TaskSchema } from './schemas/task.schema';
 import { ProjectsModule } from 'src/projects/projects.module';
+import { CloudinaryModule } from 'src/uploads/cloudinary/cloudinary.module';
 
 @Module({
   controllers: [TasksController],
@@ -11,6 +12,7 @@ import { ProjectsModule } from 'src/projects/projects.module';
   imports: [
     MongooseModule.forFeature([{ name: Task.name, schema: TaskSchema }]),
     forwardRef(() => ProjectsModule),
+    CloudinaryModule,
   ],
   exports: [TasksService, MongooseModule],
 })

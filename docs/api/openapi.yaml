@@ -17,6 +17,8 @@ tags:
     description: Create, update, assign, and manage tasks within projects
   - name: Comments  
     description: Comment on tasks and manage comments
+  - name: Users
+    description: User account operations
 
 components:
   securitySchemes:
@@ -57,17 +59,28 @@ components:
           example: john@example.com
         role:
           $ref: '#/components/schemas/Role'
-        avatar:
-          type: string
-          nullable: true
-          example: https://example.com/avatar.png
+        avatar:  
+          $ref: '#/components/schemas/AvatarObject'
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
- 
+
+    # ─── Avatar ─────────────────────────────────────────────
+    AvatarObject:
+      type: object
+      nullable: true
+      properties:
+        url:
+          type: string
+          example: "https://res.cloudinary.com/demo/image/upload/v1/avatars/john.jpg"
+        publicId:
+          type: string
+          example: "avatars/john_6a0eec205a0dabe0d64ad30a"
+      
+
     # ─── Project ─────────────────────────────────────────────
     Project:
       type: object
@@ -230,13 +243,19 @@ paths:
     post:
       tags: [Authentication]
       summary: Register a new user
-      description: >
-        Creates a new user account. `role` must be either `admin` or `user`.
-        `avatar` is optional.
+      description: |
+        Creates a new user account. Accepts `multipart/form-data` to support
+        an optional avatar image upload (Cloudinary).
+
+        - `avatar` is optional — max **2 MB**, formats: `png`, `jpeg`, `jpg`
+        - `role` must be `admin` or `user`
+        - Password is bcrypt-hashed before storage — never returned
+        - On success only a confirmation is returned (no user object)
+      security: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               required: [name, email, password, role]
@@ -244,20 +263,21 @@ paths:
                 name:
                   type: string
                   minLength: 3
-                  example: John Doe
+                  example: "John Doe"
                 email:
                   type: string
                   format: email
-                  example: john@example.com
+                  example: "john@example.com"
                 password:
                   type: string
                   minLength: 8
-                  example: secret1234
+                  example: "securePass123"
                 role:
                   $ref: '#/components/schemas/Role'
                 avatar:
                   type: string
-                  example: https://example.com/avatar.png
+                  format: binary
+                  description: Optional profile image — max 2 MB, png/jpeg/jpg only
       responses:
         '201':
           description: User registered successfully
@@ -268,28 +288,43 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   status:
                     type: integer
-                    example: 201
                   message:
                     type: string
-                    example: User created successfully
-                  user:
-                    $ref: '#/components/schemas/User'
+              example:
+                success: true
+                status: 201
+                message: "User registered successfully"
         '400':
-          description: Validation failed
+          description: Validation failed or email already exists
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationError'
-              example:
-                success: false
-                message: Validation failed
-                statusCode: 400
-                errors:
-                  email: ['Email must be a valid email address']
-                  password: ['Password must be at least 8 characters long']
+              examples:
+                validationError:
+                  summary: DTO validation failed
+                  value:
+                    success: false
+                    message: "Validation failed"
+                    statusCode: 400
+                    errors:
+                      email: ["Email must be a valid email address"]
+                      password: ["Password must be at least 8 characters long"]
+                duplicateEmail:
+                  summary: Email already registered
+                  value:
+                    success: false
+                    statusCode: 400
+                    message: "User with credentials already exists"
+                fileTooLarge:
+                  summary: Avatar exceeds 2 MB
+                  value:
+                    success: false
+                    statusCode: 400
+                    message: "Avatar file size cannot exceed 2MB"
+
   /auth/login:
     post:
       tags: [Authentication]
@@ -348,6 +383,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UnauthorizedError'
+  
   /auth/logout:
     patch:
       tags: [Authentication]
@@ -379,6 +415,168 @@ paths:
               schema:
                 $ref: '#/components/schemas/UnauthorizedError'
 
+  /auth/refresh-token:
+    patch:
+      tags: [Authentication]
+      summary: Refresh access token
+      description: |
+        Issues a new `accessToken` and rotates the `refreshToken`.
+
+        **Token source — checked in order:**
+        1. `refreshToken` cookie (browser clients)
+        2. `Authorization: Bearer <token>` header (mobile / CLI clients)
+
+        The old refresh token is immediately invalidated after rotation.
+        New tokens are set as cookies (`accessToken`, `refreshToken`) and also
+        returned in the response body and `Authorization` header.
+
+        **No `AuthGuard` required** — authentication is performed via the refresh token itself.
+      security: []
+      parameters:
+        - name: refreshToken
+          in: cookie
+          required: false
+          description: Refresh token cookie (browser clients)
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: false
+          description: "`Bearer <refreshToken>` — used when cookies are unavailable (mobile/CLI)"
+          schema:
+            type: string
+            example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: Token refreshed — new tokens returned in body, cookies, and Authorization header
+          headers:
+            Authorization:
+              description: New access token as `Bearer <token>`
+              schema:
+                type: string
+                example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            Set-Cookie:
+              description: Sets `accessToken` and `refreshToken` cookies
+              schema:
+                type: string
+                example: "accessToken=eyJ...; refreshToken=eyJ..."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  accessToken:
+                    type: string
+                    description: New short-lived JWT — use for subsequent requests
+                  refreshToken:
+                    type: string
+                    description: New rotated refresh token — replaces the previous one
+              example:
+                success: true
+                message: "Token refreshed successfully"
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YTBlZWMyMDVhMGRhYmUwZDY0YWQzMGEiLCJyb2xlIjoidXNlciIsImVtYWlsIjoiam9obkBleGFtcGxlLmNvbSIsImlhdCI6MTc0ODg2MDAwMCwiZXhwIjoxNzQ4ODYzNjAwfQ.signature"
+                refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YTBlZWMyMDVhMGRhYmUwZDY0YWQzMGEiLCJpYXQiOjE3NDg4NjAwMDAsImV4cCI6MTc0OTQ2NDgwMH0.signature"
+        '401':
+          description: Refresh token invalid, expired, revoked, or missing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+              examples:
+                missing:
+                  summary: No token provided
+                  value:
+                    success: false
+                    statusCode: 401
+                    message: "Refresh token missing"
+                expired:
+                  summary: Token has expired
+                  value:
+                    success: false
+                    statusCode: 401
+                    message: "Refresh token expired. Please login again"
+                revoked:
+                  summary: Token revoked or user inactive
+                  value:
+                    success: false
+                    statusCode: 401
+                    message: "Invalid refresh token or refresh token has been revoked"
+                malformed:
+                  summary: Token malformed
+                  value:
+                    success: false
+                    statusCode: 401
+                    message: "Invalid or malformed authentication token"
+ 
+  # ══════════════════════════════════════════════════════════
+  # USERS
+  # ══════════════════════════════════════════════════════════
+  /users/upload-avatar:
+    post:
+      tags: [Users]
+      summary: Upload or replace user avatar
+      description: |
+        Uploads a new avatar image to Cloudinary and updates the authenticated user's record.
+
+        - If the user already has an avatar, **the existing Cloudinary asset is destroyed first** before uploading the new one.
+        - Returns the updated user object (password, refreshToken, `__v`, timestamps excluded).
+
+        **Guards:** `AuthGuard`
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [avatar]
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Image file to upload — png/jpeg/jpg
+      responses:
+        '201':
+          description: Avatar uploaded and user record updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  status:
+                    type: integer
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/User'
+              example:
+                success: true
+                status: 201
+                message: "Avatar uploaded successfully"
+                data:
+                  _id: "6a0eec205a0dabe0d64ad30a"
+                  name: "John Doe"
+                  email: "john@example.com"
+                  role: "user"
+                  avatar:
+                    url: "https://res.cloudinary.com/demo/image/upload/v1/avatars/john.jpg"
+                    publicId: "avatars/john_6a0eec205a0dabe0d64ad30a"
+        '401':
+          description: Unauthorized — invalid or missing token, or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+              example:
+                success: false
+                statusCode: 401
+                message: "Unauthorized Access"
+ 
  # ══════════════════════════════════════════════════════════
   # PROJECTS
   # ══════════════════════════════════════════════════════════
@@ -1692,3 +1890,4 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotFoundError'
+
