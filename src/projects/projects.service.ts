@@ -12,6 +12,11 @@ import { InjectModel } from '@nestjs/mongoose';
 import { AddProjectMembersDto } from './dtos/add-project-members.dto';
 import { AuthorizedUser } from 'src/shared/types/auth-user';
 import { Role } from 'src/shared/types/role';
+import {
+  GetProjectsQueryDto,
+  SortBy,
+  SortOrder,
+} from './dtos/get-projects-query.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -52,19 +57,69 @@ export class ProjectsService {
     );
   }
 
-  async getAllProjects(user: AuthorizedUser) {
-    let authFilters = {};
+  async getAllProjects(user: AuthorizedUser, query: GetProjectsQueryDto) {
+    const {
+      page: clientPage,
+      limit: clientLimit,
+      search,
+      sortBy: clientSortBy,
+      sortOrder: clientSortOrder,
+    } = query;
+
+    const sortBy = new Set(Object.values(SortBy)).has(
+      (clientSortBy as SortBy) || ('' as SortBy),
+    )
+      ? clientSortBy!
+      : SortBy.createdAt;
+
+    const sortOrder = clientSortOrder === SortOrder.asc ? 1 : -1;
+    const limit = Math.min(
+      clientLimit ?? +process.env.DEFAULT_LIMIT!,
+      +process.env.DEFAULT_LIMIT!,
+    );
+    const page = clientPage ?? +process.env.DEFAULT_PAGE!;
+    const skip = (page - 1) * limit;
+
+    const queryFilter: any[] = [];
+
     if (user.role !== Role.admin) {
-      authFilters = {
+      queryFilter.push({
         $or: [
           { ownerId: new Types.ObjectId(user.id) },
-          {
-            members: { $in: [new Types.ObjectId(user.id)] },
-          },
+          { members: { $in: [new Types.ObjectId(user.id)] } },
         ],
-      };
+      });
     }
-    return await this.projectModel.find(authFilters);
+
+    if (search) {
+      queryFilter.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ],
+      });
+    }
+
+    const finalQuery = queryFilter.length > 0 ? { $and: queryFilter } : {};
+    const [items, total] = await Promise.all([
+      this.projectModel
+        .find(finalQuery)
+        .sort({ [sortBy]: sortOrder })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.projectModel.countDocuments(finalQuery),
+    ]);
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async getProjectDetails(projectId: string) {
