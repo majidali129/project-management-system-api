@@ -79,7 +79,7 @@ export class TasksController {
   @Delete(':taskId')
   @UseGuards(ProjectAccessGuard, TaskAccessGuard)
   async deleteTask(@Req() req: Request, @Param('taskId') taskId: string) {
-    const deletedTask = await this.taskService.deleteTask(taskId, req.user);
+    const deletedTask = await this.taskService.deleteTask(taskId, req.user, req.task);
 
     return {
       success: true,
@@ -100,6 +100,7 @@ export class TasksController {
       taskId,
       dto,
       req.user,
+      req.project
     );
     return {
       success: true,
@@ -111,12 +112,12 @@ export class TasksController {
 
   @Delete(':taskId/unassign-task')
   @UseGuards(ProjectOwnerOrAdminGuard)
-  async unAssignTask(@Param('taskId') taskId: string) {
-    const updatedTask = await this.taskService.unAssign(taskId);
+  async unAssignTask(@Param('taskId') taskId: string, @Req() req: Request) {
+    const updatedTask = await this.taskService.unAssign(taskId, req.user, req.task);
     return {
       success: true,
       status: HttpStatus.OK,
-      message: `Task un-ssigned successfully`,
+      message: `Task un-assigned successfully`,
       task: updatedTask,
     };
   }

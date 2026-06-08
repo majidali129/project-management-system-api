@@ -7,8 +7,8 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { TaskPriority } from '../types/task-priority';
-import { TaskStatus } from '../types/task-status';
+import { TaskPriority } from '../constants/task-priority';
+import { TaskStatus } from '../constants/task-status';
 
 export class UpdateTaskDto {
   @IsString()

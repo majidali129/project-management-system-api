@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
@@ -23,13 +24,13 @@ import { ProjectOwnerOrAdminGuard } from './guards/project-owner-admin.guard';
 import { ProjectAccessGuard } from './guards/project-access.guard';
 import { TasksService } from 'src/tasks/tasks.service';
 import { GetTasksQueryDto } from './dtos/get-tasks-query.dto';
+import type { Request } from 'express';
 
 @Controller('projects')
 @UseGuards(AuthGuard)
 export class ProjectsController {
   constructor(
     private readonly projectService: ProjectsService,
-    private readonly taskService: TasksService,
   ) {}
 
   @Post()
@@ -101,8 +102,8 @@ export class ProjectsController {
 
   @Get(':projectId')
   @UseGuards(ProjectAccessGuard)
-  async getProjectDetails(@Param('projectId') projectId: string) {
-    const project = await this.projectService.getProjectDetails(projectId);
+  async getProjectDetails(@Param('projectId') projectId: string, @Req() req: Request) {
+    const project = await this.projectService.getProjectDetails(projectId, req.project);
     return {
       success: true,
       status: HttpStatus.OK,
@@ -179,7 +180,7 @@ export class ProjectsController {
     @User() user: AuthorizedUser,
     @Query(new ValidationPipe({ transform: true })) query: GetTasksQueryDto,
   ) {
-    const tasks = await this.taskService.getProjectTasks(
+    const tasks = await this.projectService.getProjectTasks(
       projectId,
       user,
       query,

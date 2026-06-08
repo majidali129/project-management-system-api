@@ -1,5 +1,5 @@
 import { IsEnum } from 'class-validator';
-import { TaskStatus } from '../types/task-status';
+import { TaskStatus } from '../constants/task-status';
 
 export class toggleTaskStatusDto {
   @IsEnum(TaskStatus, {

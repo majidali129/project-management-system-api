@@ -7,8 +7,8 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TaskStatus } from 'src/tasks/types/task-status';
-import { TaskPriority } from 'src/tasks/types/task-priority';
+import { TaskStatus } from 'src/tasks/constants/task-status';
+import { TaskPriority } from 'src/tasks/constants/task-priority';
 
 export class GetTasksQueryDto {
   @IsOptional()

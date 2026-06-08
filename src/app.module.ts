@@ -9,15 +9,17 @@ import { ProjectsModule } from './projects/projects.module';
 import { TasksModule } from './tasks/tasks.module';
 import { CommentsModule } from './comments/comments.module';
 import { CloudinaryModule } from './uploads/cloudinary/cloudinary.module';
+import { CacheModule } from '@nestjs/cache-manager';
 
 @Module({
   imports: [
-    UsersModule,
-    AuthModule,
+    CacheModule.register({isGlobal: true}),
     ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRoot(process.env.DB_URI!, {
       dbName: 'project-management-system',
     }),
+    UsersModule,
+    AuthModule,
     ProjectsModule,
     TasksModule,
     CommentsModule,
