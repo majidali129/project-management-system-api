@@ -6,15 +6,7 @@ export type ProjectDocument = HydratedDocument<Project>;
 
 @Schema({
   timestamps: true,
-  // virtuals: true,
-  // toJSON: {
-  //   transform: (doc, ret: Record<string, any>) => {
-  //     ret['id'] = ret._id.toString();
-  //     delete ret.__v;
-  //     delete ret._id;
-  //     return ret;
-  //   },
-  // },
+  
 })
 export class Project {
   @Prop({

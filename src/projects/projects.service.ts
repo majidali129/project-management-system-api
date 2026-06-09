@@ -242,50 +242,70 @@ export class ProjectsService {
         id: string;
         name: string;
         email: string;
-        avatar: string;
+        avatar: {
+          url: string;
+          publicId: string;
+        }
       }[];
     }
 
     const cache = await this.cache.get(PROJECT_CACHE_KEYS.members(projectId))
-    if(cache) return normalizeList(cache as AggregatedProject['members'])
+    if (cache) return cache;
 
-    const projectMembers = await this.projectModel.aggregate<AggregatedProject>(
-      [
-        {
-          $match: {
-            _id: new Types.ObjectId(projectId),
-          },
+    const projectMembers = await this.projectModel.aggregate([
+      {
+        $match: {
+          _id: new Types.ObjectId(projectId),
         },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'members',
-            foreignField: '_id',
-            as: 'pMembers',
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            members: {
+      },
+      {
+        $lookup: {
+          from: 'users',
+          let: {
+            memberIds: {
               $map: {
-                input: '$pMembers',
-                as: 'member',
-                in: {
-                  id: { $toString: '$$member._id' },
-                  name: '$$member.name',
-                  email: '$$member.email',
-                  avatar: '$$member.avatar',
-                },
+                input: '$members',
+                as: 'memberId',
+                in: { $toString: '$$memberId' },
               },
             },
           },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $in: [{ $toString: '$_id' }, '$$memberIds'],
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                id: { $toString: '$_id' },
+                name: 1,
+                email: 1,
+                avatar: {
+                  url: '$avatar.url',
+                  publicId: '$avatar.publicId',
+                },
+              },
+            },
+          ],
+          as: 'members',
         },
-      ],
-    );
+      },
+      {
+        $project: {
+          _id: 0,
+          members: 1,
+        },
+      },
+    ]);
+  
+    const members = projectMembers[0]?.members ?? [];
 
-    await this.cache.set(PROJECT_CACHE_KEYS.members(projectId), projectMembers[0]['members'], PROJECT_CACHE_TTL.members)
-    return normalizeList(projectMembers[0]['members']);
+    await this.cache.set(PROJECT_CACHE_KEYS.members(projectId), members, PROJECT_CACHE_TTL.members)
+    return members;
   }
 
   async getProjectTasks(projectId: string, user: AuthorizedUser, query) {
