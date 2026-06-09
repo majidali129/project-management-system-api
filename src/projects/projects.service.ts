@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Model, Types } from 'mongoose';
-import { Project } from './schemas/project.schema';
+import { Project, ProjectDocument } from './schemas/project.schema';
 import { CreateProjectDto } from './dtos/create-project.dto';
 import { UpdateProjectDto } from './dtos/update-project.dto';
 import { UpdateProjectStatusDto } from './dtos/toggle-project-status.dto';
@@ -12,6 +14,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { AddProjectMembersDto } from './dtos/add-project-members.dto';
 import { AuthorizedUser } from 'src/shared/types/auth-user';
 import { Role } from 'src/shared/types/role';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { PROJECT_CACHE_KEYS, PROJECT_CACHE_TTL } from './constants/cache-keys';
+import { TasksService } from 'src/tasks/tasks.service';
 import {
   GetProjectsQueryDto,
   SortBy,
@@ -22,12 +27,17 @@ import {
 export class ProjectsService {
   constructor(
     @InjectModel(Project.name) private readonly projectModel: Model<Project>,
-  ) {}
+    @Inject(CACHE_MANAGER) private cache: Cache,
+    private readonly taskService: TasksService,
+  ) { }
   async createProject(userId: string, createProjectDto: CreateProjectDto) {
-    return this.projectModel.create({
+   const createdProject = await this.projectModel.create({
       ...createProjectDto,
       ownerId: new Types.ObjectId(userId),
     });
+    await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
+    await this.cache.del(PROJECT_CACHE_KEYS.allByUser(userId))
+    return createdProject
   }
 
   async updateProject(projectId: string, updateProjectDto: UpdateProjectDto) {
@@ -35,18 +45,22 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException('Project not found or have been deleted');
     }
-    return await this.projectModel.findByIdAndUpdate(
+    const updatedProject =  await this.projectModel.findByIdAndUpdate(
       projectId,
       updateProjectDto,
       { returnDocument: 'after' },
     );
+    await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
+    await this.cache.del(PROJECT_CACHE_KEYS.allByUser(project.ownerId.toString()))
+    return updatedProject;
   }
 
   async toggleProjectStatus(
     projectId: string,
     updateProjectStatusDto: UpdateProjectStatusDto,
   ) {
-    return this.projectModel.findByIdAndUpdate(
+    const updatedProject = await  this.projectModel.findByIdAndUpdate(
       projectId,
       {
         $set: {
@@ -55,6 +69,12 @@ export class ProjectsService {
       },
       { new: true },
     );
+    if(!updatedProject) throw new InternalServerErrorException('Error while updating project status. Try later please')
+
+    await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
+    await this.cache.del(PROJECT_CACHE_KEYS.allByUser(updatedProject.ownerId.toString()))
+    return updatedProject;
   }
 
   async getAllProjects(user: AuthorizedUser, query: GetProjectsQueryDto) {
@@ -99,6 +119,15 @@ export class ProjectsService {
         ],
       });
     }
+    const KEY = user.role === Role.admin ? PROJECT_CACHE_KEYS.allAdmin: PROJECT_CACHE_KEYS.allByUser(user.id)
+    const cached = await this.cache.get(KEY) as ProjectDocument[]
+    if (cached)  return {
+      items: cached ?? [],
+      metadata: {
+        page,limit, total: cached.length,
+        totalPages: Math.ceil(cached.length/limit)
+      }
+    }
 
     const finalQuery = queryFilter.length > 0 ? { $and: queryFilter } : {};
     const [items, total] = await Promise.all([
@@ -111,6 +140,8 @@ export class ProjectsService {
       this.projectModel.countDocuments(finalQuery),
     ]);
 
+    await this.cache.set(KEY, items, user.role === Role.admin? PROJECT_CACHE_TTL.admin: PROJECT_CACHE_TTL.user)
+
     return {
       items,
       metadata: {
@@ -122,11 +153,11 @@ export class ProjectsService {
     };
   }
 
-  async getProjectDetails(projectId: string) {
-    const project = await this.projectModel.findById(projectId).lean().exec();
-    if (!project)
-      throw new NotFoundException('Project not found. Or hase been deleted');
+  async getProjectDetails(projectId: string, project: Project) {
+    const cache = await this.cache.get(PROJECT_CACHE_KEYS.details(projectId));
+    if(cache) return cache as ProjectDocument
 
+    await this.cache.set(PROJECT_CACHE_KEYS.details(projectId), project, PROJECT_CACHE_TTL.details)
     return project;
   }
 
@@ -151,7 +182,7 @@ export class ProjectsService {
         `Members already exist in project: ${duplicateMemberIds.join(', ')}`,
       );
     }
-    return await this.projectModel.findByIdAndUpdate(
+    const updatedProject =  await this.projectModel.findByIdAndUpdate(
       projectId,
       {
         $addToSet: {
@@ -162,6 +193,11 @@ export class ProjectsService {
       },
       { returnDocument: 'after' },
     );
+    await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.members(projectId))
+    // await this.cache.del(PROJECT_CACHE_KEYS.allByUser(addMembersDto.memberIds))
+    await Promise.all(addMembersDto.memberIds.map(id => this.cache.del(PROJECT_CACHE_KEYS.allByUser(id))));
+    return updatedProject;
   }
 
   async removeProjectMember(projectId: string, memberId: string) {
@@ -179,7 +215,7 @@ export class ProjectsService {
       );
     }
 
-    return this.projectModel.findByIdAndUpdate(
+    const updatedProject = await this.projectModel.findByIdAndUpdate(
       projectId,
       {
         $pull: {
@@ -188,6 +224,11 @@ export class ProjectsService {
       },
       { returnDocument: 'after' },
     );
+
+    await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.members(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.allByUser(memberId))
+    return updatedProject;
   }
 
   async getProjectMembers(projectId: string) {
@@ -200,6 +241,9 @@ export class ProjectsService {
         avatar: string;
       }[];
     }
+
+    const cache = await this.cache.get(PROJECT_CACHE_KEYS.members(projectId))
+    if(cache) return cache as AggregatedProject['members']
 
     const projectMembers = await this.projectModel.aggregate<AggregatedProject>(
       [
@@ -235,10 +279,26 @@ export class ProjectsService {
         },
       ],
     );
+
+    await this.cache.set(PROJECT_CACHE_KEYS.members(projectId), projectMembers[0]['members'], PROJECT_CACHE_TTL.members)
     return projectMembers[0]['members'];
   }
 
+  async getProjectTasks(projectId: string, user: AuthorizedUser, query) {
+    return await this.taskService.getProjectTasks(
+      projectId,
+      user,
+      query,
+    );
+  }
+
   async deleteProject(projectId: string) {
-    await this.projectModel.findByIdAndDelete(projectId);
+    //TODO: call tasks service to delete linked tasks with this project. also clear cache for deleted tasks
+    const deletedDoc = await this.projectModel.findByIdAndDelete(projectId);
+    if(!deletedDoc) return new InternalServerErrorException('Error while deleting the project. Try later please.')
+    await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.members(projectId))
+    await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
+    await this.cache.del(PROJECT_CACHE_KEYS.allByUser(deletedDoc.ownerId.toString()))
   }
 }

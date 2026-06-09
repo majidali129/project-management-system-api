@@ -1,5 +1,5 @@
 import { IsEnum } from 'class-validator';
-import { ProjectStatus } from 'src/projects/types/project-status';
+import { ProjectStatus } from 'src/projects/constants/project-status';
 
 export class UpdateProjectStatusDto {
   @IsEnum(ProjectStatus, {

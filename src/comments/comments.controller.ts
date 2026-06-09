@@ -36,8 +36,7 @@ export class CommentsController {
       createCommentDto,
     );
     return {
-      success: true,
-      status: HttpStatus.CREATED,
+      statusCode: HttpStatus.CREATED,
       message: 'Comment created successfully',
       comment: createdComment,
     };
@@ -47,8 +46,7 @@ export class CommentsController {
   async findAll(@Param('taskId') taskId: string) {
     const comments = await this.commentsService.findAll(taskId);
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Comments fetched successfully',
       comments,
     };
@@ -58,8 +56,7 @@ export class CommentsController {
   async findOne(@Param('id') id: string, @Param('taskId') taskId: string) {
     const comment = await this.commentsService.findOne(id, taskId);
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Comment fetched successfully',
       comment,
     };
@@ -79,8 +76,7 @@ export class CommentsController {
       updateCommentDto,
     );
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Comment updated successfully',
       comment,
     };
@@ -91,8 +87,7 @@ export class CommentsController {
   async remove(@Param('id') id: string, @Param('taskId') taskId: string) {
     await this.commentsService.remove(id, taskId);
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Comment deleted successfully',
       data: null,
     };

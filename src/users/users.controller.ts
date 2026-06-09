@@ -26,8 +26,7 @@ export class UsersController {
   ) {
     const updatedUser = await this.userService.uploadAvatar(user, file);
     return {
-      success: true,
-      status: HttpStatus.CREATED,
+      statusCode: HttpStatus.CREATED,
       message: 'Avatar uploaded successfully',
       data: updatedUser,
     };

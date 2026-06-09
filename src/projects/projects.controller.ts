@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
@@ -21,8 +22,8 @@ import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { AddProjectMembersDto } from './dtos/add-project-members.dto';
 import { ProjectOwnerOrAdminGuard } from './guards/project-owner-admin.guard';
 import { ProjectAccessGuard } from './guards/project-access.guard';
-import { TasksService } from 'src/tasks/tasks.service';
 import { GetTasksQueryDto } from './dtos/get-tasks-query.dto';
+import type { Request } from 'express';
 import { GetProjectsQueryDto } from './dtos/get-projects-query.dto';
 
 @Controller('projects')
@@ -30,7 +31,6 @@ import { GetProjectsQueryDto } from './dtos/get-projects-query.dto';
 export class ProjectsController {
   constructor(
     private readonly projectService: ProjectsService,
-    private readonly taskService: TasksService,
   ) {}
 
   @Post()
@@ -44,8 +44,7 @@ export class ProjectsController {
     );
 
     return {
-      success: true,
-      status: HttpStatus.CREATED,
+      statusCode: HttpStatus.CREATED,
       message: 'Project created successfully',
       project: createdProject,
     };
@@ -63,8 +62,7 @@ export class ProjectsController {
     );
 
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Project updated successfully',
       project: updatedProject,
     };
@@ -82,8 +80,7 @@ export class ProjectsController {
     );
 
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: `Project status updated to ${updateProjectStatusDto.status} successfully`,
       project: updatedProject,
     };
@@ -98,8 +95,7 @@ export class ProjectsController {
       query,
     );
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Projects fetched successfully',
       data: {
         items,
@@ -110,11 +106,10 @@ export class ProjectsController {
 
   @Get(':projectId')
   @UseGuards(ProjectAccessGuard)
-  async getProjectDetails(@Param('projectId') projectId: string) {
-    const project = await this.projectService.getProjectDetails(projectId);
+  async getProjectDetails(@Param('projectId') projectId: string, @Req() req: Request) {
+    const project = await this.projectService.getProjectDetails(projectId, req.project);
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Project details fetched successfully',
       project,
     };
@@ -125,8 +120,7 @@ export class ProjectsController {
   async getProjectMembers(@Param('projectId') projectId: string) {
     const members = await this.projectService.getProjectMembers(projectId);
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Project members fetched successfully',
       members,
     };
@@ -144,8 +138,7 @@ export class ProjectsController {
     );
 
     return {
-      success: true,
-      status: HttpStatus.CREATED,
+      statusCode: HttpStatus.CREATED,
       message: 'Member added successfully',
       project,
     };
@@ -162,8 +155,7 @@ export class ProjectsController {
       memberId,
     );
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Member removed successfully',
       project,
     };
@@ -176,7 +168,7 @@ export class ProjectsController {
 
     return {
       success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Project deleted successfully',
     };
   }
@@ -188,14 +180,14 @@ export class ProjectsController {
     @User() user: AuthorizedUser,
     @Query(new ValidationPipe({ transform: true })) query: GetTasksQueryDto,
   ) {
-    const { items, metadata } = await this.taskService.getProjectTasks(
+    const {items, metadata} = await this.projectService.getProjectTasks(
       projectId,
       user,
       query,
     );
+
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Tasks for this project fetched successfully',
       data: { items, metadata },
     };

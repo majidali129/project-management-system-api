@@ -7,8 +7,20 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TaskStatus } from 'src/tasks/types/task-status';
-import { TaskPriority } from 'src/tasks/types/task-priority';
+import { TaskStatus } from 'src/tasks/constants/task-status';
+import { TaskPriority } from 'src/tasks/constants/task-priority';
+
+export enum SortBy {
+  createdAt = 'createdAt',
+  updatedAt = 'updatedAt',
+  status = 'status',
+  dueDate = 'dueDate',
+}
+
+export enum SortOrder {
+  asc = 'asc',
+  desc = 'desc',
+}
 
 export enum SortBy {
   createdAt = 'createdAt',
