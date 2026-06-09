@@ -13,6 +13,7 @@ import { Role } from 'src/shared/types/role';
 import { Task } from '../schemas/task.schema';
 import { TASK_CACHE_KEYS, TASK_CACHE_TTL } from '../constants/cache-keys';
 import { Cache } from '@nestjs/cache-manager';
+import { normalizeItem } from 'src/shared/utils/normalize-response';
 
 export class TaskAccessGuard implements CanActivate {
   constructor(@InjectModel(Task.name) private taskModel: Model<Task>, private cache: Cache) { }
@@ -45,8 +46,7 @@ export class TaskAccessGuard implements CanActivate {
         'Access denied: You are not authorized to perform this action',
       );
     }
-
-    req['task'] = task;
+    req['task'] = normalizeItem(task) as unknown as Task & { _id: Types.ObjectId };
     return true;
   }
 }

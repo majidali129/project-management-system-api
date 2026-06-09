@@ -13,6 +13,7 @@ import { Model, Types } from 'mongoose';
 import { Role } from 'src/shared/types/role';
 import { CACHE_MANAGER, Cache } from '@nestjs/cache-manager';
 import { PROJECT_CACHE_KEYS, PROJECT_CACHE_TTL } from '../constants/cache-keys';
+import { normalizeItem } from 'src/shared/utils/normalize-response';
 
 export class ProjectAccessGuard implements CanActivate {
   constructor(
@@ -57,7 +58,7 @@ export class ProjectAccessGuard implements CanActivate {
       );
     }
 
-    req['project'] = project as Project & { _id: Types.ObjectId }
+    req['project'] = normalizeItem(project) as unknown as Project & { _id: Types.ObjectId };
     return true;
   }
 }

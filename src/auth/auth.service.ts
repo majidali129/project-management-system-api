@@ -16,6 +16,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Role } from 'src/shared/types/role';
 import { CloudinaryService } from 'src/uploads/cloudinary/cloudinary.service';
+import { UserResponseDto } from './dtos/user-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -58,7 +59,7 @@ export class AuthService {
     }
 
     //TODO: 5. Call Email Sercice to Send email for verification ( Optional )
-   return true
+   return new UserResponseDto(createdUser)
   }
   async login({ email, password }: LoginUserDto) {
     const user = await this.userModel.findOne({ email }).exec();

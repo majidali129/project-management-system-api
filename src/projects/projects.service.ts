@@ -22,6 +22,7 @@ import {
   SortBy,
   SortOrder,
 } from './dtos/get-projects-query.dto';
+import { normalizeList, normalizeItem } from 'src/shared/utils/normalize-response';
 
 @Injectable()
 export class ProjectsService {
@@ -37,7 +38,7 @@ export class ProjectsService {
     });
     await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
     await this.cache.del(PROJECT_CACHE_KEYS.allByUser(userId))
-    return createdProject
+    return normalizeItem(createdProject)
   }
 
   async updateProject(projectId: string, updateProjectDto: UpdateProjectDto) {
@@ -50,10 +51,11 @@ export class ProjectsService {
       updateProjectDto,
       { returnDocument: 'after' },
     );
+    if(!updatedProject) throw new InternalServerErrorException('Error while updating project. Try later please')
     await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
     await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
     await this.cache.del(PROJECT_CACHE_KEYS.allByUser(project.ownerId.toString()))
-    return updatedProject;
+    return normalizeItem(updatedProject);
   }
 
   async toggleProjectStatus(
@@ -68,13 +70,13 @@ export class ProjectsService {
         },
       },
       { new: true },
-    );
+    ).lean().exec();
     if(!updatedProject) throw new InternalServerErrorException('Error while updating project status. Try later please')
 
     await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
     await this.cache.del(PROJECT_CACHE_KEYS.allAdmin)
     await this.cache.del(PROJECT_CACHE_KEYS.allByUser(updatedProject.ownerId.toString()))
-    return updatedProject;
+    return normalizeItem(updatedProject);
   }
 
   async getAllProjects(user: AuthorizedUser, query: GetProjectsQueryDto) {
@@ -122,7 +124,7 @@ export class ProjectsService {
     const KEY = user.role === Role.admin ? PROJECT_CACHE_KEYS.allAdmin: PROJECT_CACHE_KEYS.allByUser(user.id)
     const cached = await this.cache.get(KEY) as ProjectDocument[]
     if (cached)  return {
-      items: cached ?? [],
+      items: normalizeList(cached)?? [],
       metadata: {
         page,limit, total: cached.length,
         totalPages: Math.ceil(cached.length/limit)
@@ -135,15 +137,15 @@ export class ProjectsService {
         .find(finalQuery)
         .sort({ [sortBy]: sortOrder })
         .skip(skip)
-        .limit(limit)
-        .lean(),
+        .limit(limit).lean()
+        ,
       this.projectModel.countDocuments(finalQuery),
     ]);
 
     await this.cache.set(KEY, items, user.role === Role.admin? PROJECT_CACHE_TTL.admin: PROJECT_CACHE_TTL.user)
 
     return {
-      items,
+      items: normalizeList(items),
       metadata: {
         page,
         limit,
@@ -155,10 +157,10 @@ export class ProjectsService {
 
   async getProjectDetails(projectId: string, project: Project) {
     const cache = await this.cache.get(PROJECT_CACHE_KEYS.details(projectId));
-    if(cache) return cache as ProjectDocument
+    if(cache) return normalizeItem(cache) as ProjectDocument
 
     await this.cache.set(PROJECT_CACHE_KEYS.details(projectId), project, PROJECT_CACHE_TTL.details)
-    return project;
+    return normalizeItem(project)
   }
 
   async addProjectMemebers(
@@ -192,12 +194,13 @@ export class ProjectsService {
         },
       },
       { returnDocument: 'after' },
-    );
+    ).lean()
+
+    if(!updatedProject) throw new InternalServerErrorException('Error while adding members to project. Try later please')
     await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
     await this.cache.del(PROJECT_CACHE_KEYS.members(projectId))
-    // await this.cache.del(PROJECT_CACHE_KEYS.allByUser(addMembersDto.memberIds))
     await Promise.all(addMembersDto.memberIds.map(id => this.cache.del(PROJECT_CACHE_KEYS.allByUser(id))));
-    return updatedProject;
+    return normalizeItem(updatedProject)
   }
 
   async removeProjectMember(projectId: string, memberId: string) {
@@ -225,10 +228,11 @@ export class ProjectsService {
       { returnDocument: 'after' },
     );
 
+    if(!updatedProject) throw new InternalServerErrorException('Error while removing member from project. Try later please')
     await this.cache.del(PROJECT_CACHE_KEYS.details(projectId))
     await this.cache.del(PROJECT_CACHE_KEYS.members(projectId))
     await this.cache.del(PROJECT_CACHE_KEYS.allByUser(memberId))
-    return updatedProject;
+    return normalizeItem(updatedProject);
   }
 
   async getProjectMembers(projectId: string) {
@@ -243,7 +247,7 @@ export class ProjectsService {
     }
 
     const cache = await this.cache.get(PROJECT_CACHE_KEYS.members(projectId))
-    if(cache) return cache as AggregatedProject['members']
+    if(cache) return normalizeList(cache as AggregatedProject['members'])
 
     const projectMembers = await this.projectModel.aggregate<AggregatedProject>(
       [
@@ -281,7 +285,7 @@ export class ProjectsService {
     );
 
     await this.cache.set(PROJECT_CACHE_KEYS.members(projectId), projectMembers[0]['members'], PROJECT_CACHE_TTL.members)
-    return projectMembers[0]['members'];
+    return normalizeList(projectMembers[0]['members']);
   }
 
   async getProjectTasks(projectId: string, user: AuthorizedUser, query) {

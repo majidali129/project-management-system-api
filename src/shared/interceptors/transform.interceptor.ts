@@ -13,16 +13,21 @@ export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponse<T
         const statusCode = response.statusCode;
 
         return next.handle().pipe(map(data => {
-            const { message, ...rest } = data;
-          
+            const message = data?.message || 'Request processed successfully';
+            const payload = data?.message ? this.removeMessage(data) : data;  
             return {
                 success: true,
                 statusCode,
-                message: data.message || 'Request processed successfully',
-                data: rest,
+                message,
+                data: payload.data,
                 errors: null,
                 timestamp: new Date().toISOString(),
             }
         }))
+    }
+
+    private removeMessage(data: any) {
+        const { message, statusCode, ...rest } = data;
+        return rest;
     }
 }

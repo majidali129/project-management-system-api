@@ -46,7 +46,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.CREATED,
       message: 'Project created successfully',
-      project: createdProject,
+      data: createdProject,
     };
   }
 
@@ -64,7 +64,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Project updated successfully',
-      project: updatedProject,
+      data: updatedProject,
     };
   }
 
@@ -82,7 +82,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.OK,
       message: `Project status updated to ${updateProjectStatusDto.status} successfully`,
-      project: updatedProject,
+      data: updatedProject,
     };
   }
   @Get()
@@ -111,7 +111,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Project details fetched successfully',
-      project,
+      data: project,
     };
   }
 
@@ -122,7 +122,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Project members fetched successfully',
-      members,
+      data: members,
     };
   }
 
@@ -140,7 +140,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.CREATED,
       message: 'Member added successfully',
-      project,
+      data: project,
     };
   }
 
@@ -157,7 +157,7 @@ export class ProjectsController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Member removed successfully',
-      project,
+      data: project,
     };
   }
 
