@@ -7,14 +7,6 @@ export type TaskDocument = HydratedDocument<Task>;
 
 @Schema({
   timestamps: true,
-  toJSON: {
-    transform: (_doc, ret: Record<string, any>) => {
-      ret['id'] = ret._id as string;
-      delete ret.__v;
-      delete ret._id;
-      return ret;
-    },
-  },
 })
 export class Task {
   @Prop({

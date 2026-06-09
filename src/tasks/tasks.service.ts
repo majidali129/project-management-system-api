@@ -24,6 +24,7 @@ import { CloudinaryService } from 'src/uploads/cloudinary/cloudinary.service';
 import { Project } from 'src/projects/schemas/project.schema';
 import { TASK_CACHE_KEYS, TASK_CACHE_TTL } from './constants/cache-keys';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { normalizeItem, normalizeList } from 'src/shared/utils/normalize-response';
 
 export interface AggregatedTaskResult {
   items: {
@@ -36,12 +37,12 @@ export interface AggregatedTaskResult {
     createdAt: Date;
     updatedAt: Date;
     assignedTo?: {
-      _id: string;
+      id: string;
       name: string;
       avatar: string;
     };
     owner: {
-      _id: string;
+      id: string;
       name: string;
     };
     attachment?: { url: string; publicId: string };
@@ -65,12 +66,12 @@ export class TasksService {
       assignedTo: dto.assignedTo
         ? new Types.ObjectId(dto.assignedTo)
         : undefined,
-    });
+    })
 
     if (!createdTask) throw new InternalServerErrorException('Failed to create task. Try later please');
     await this.cache.del(TASK_CACHE_KEYS.allAdmin)
     await this.cache.del(TASK_CACHE_KEYS.allByUser(userId))
-    return createdTask
+    return normalizeItem(createdTask.toObject())
   }
 
   async updateTask(dto: UpdateTaskDto, taskId: string, projectId: string) {
@@ -87,13 +88,13 @@ export class TasksService {
       {
         returnDocument: 'after',
       },
-    );
+    ).lean().exec();
 
     if (!updatedTask) throw new InternalServerErrorException('Failed to update task. Try later please');
     await this.cache.del(TASK_CACHE_KEYS.details(taskId))
     await this.cache.del(TASK_CACHE_KEYS.allAdmin)
     await this.cache.del(TASK_CACHE_KEYS.allByUser(task.createdBy.toString()))
-    return updatedTask
+    return normalizeItem(updatedTask)
   }
 
   async getProjectTasks(
@@ -120,11 +121,10 @@ export class TasksService {
     const sortOrder = clientSortOrder === SortOrder.asc ? 1 : -1;
     const limit = Math.min(
       clientLimit ?? +process.env.DEFAULT_LIMIT!,
-      +process.env.DEFAULE_LIMIT!,
+      +process.env.DEFAULT_LIMIT!,
     );
     const page = clientPage ?? +process.env.DEFAULT_PAGE!;
     const skip = (page - 1) * limit;
-
     const initialMatch: any[] = [
       {
         projectId: new Types.ObjectId(projectId),
@@ -176,7 +176,8 @@ export class TasksService {
             },
             {
               $project: {
-                _id: 1,
+                _id: 0,
+                id: {$toString: '$_id'},
                 name: 1,
                 avatar: 1,
               },
@@ -204,7 +205,8 @@ export class TasksService {
             },
             {
               $project: {
-                _id: 1,
+                _id: 0,
+                id: {$toString: '$_id'},
                 name: 1,
                 avatar: 1,
                 createdAt: 1,
@@ -278,7 +280,7 @@ export class TasksService {
     const cached = await this.cache.get(KEY) as AggregatedTaskResult['items'];
     if (cached) {
       return {
-        items: cached?? [],
+        items: normalizeList(cached)?? [],
         metadata: {
           page,
           limit,
@@ -289,7 +291,7 @@ export class TasksService {
     }
 
     const aggregatedResult =
-      await this.taskModel.aggregate<AggregatedTaskResult>(pipeline);
+      await this.taskModel.aggregate<AggregatedTaskResult>(pipeline)
     const data: AggregatedTaskResult = aggregatedResult[0] || {
       items: [],
       total: 0,
@@ -298,7 +300,7 @@ export class TasksService {
     await this.cache.set(KEY, data.items, role === Role.admin?  TASK_CACHE_TTL.admin: TASK_CACHE_TTL.user);
 
     return {
-      items: data?.items ?? [],
+      items: normalizeList(data?.items) ?? [],
       metadata: {
         page,
         limit,
@@ -309,18 +311,19 @@ export class TasksService {
   }
 
 
+
   async deleteTask(taskId: string, user: AuthorizedUser, task: Task) {
     if (task.assignedTo && task.assignedTo.toString() === user.id) {
       throw new ForbiddenException(
         'Access denied: Only Admins or Task creator can delete a task',
       );
     }
-    const deletedTask = await this.taskModel.findOneAndDelete({ _id: taskId });
+    const deletedTask = await this.taskModel.findOneAndDelete({ _id: taskId }).lean().exec();
     if (!deletedTask) throw new InternalServerErrorException('Failed to delete task. Try later please');
     await this.cache.del(TASK_CACHE_KEYS.details(taskId))
     await this.cache.del(TASK_CACHE_KEYS.allAdmin)
     await this.cache.del(TASK_CACHE_KEYS.allByUser(user.id))
-    return deletedTask
+    return deletedTask ? normalizeItem(deletedTask) : null;
   }
 
   async assignTask(
@@ -351,7 +354,7 @@ export class TasksService {
     }
 
     const updatedTask = await this.taskModel.findOneAndUpdate(
-      { _id: taskId, projectId: new Types.ObjectId(assignTaskDto.projectId) },
+      { _id: new Types.ObjectId(taskId), projectId: new Types.ObjectId(assignTaskDto.projectId) },
       {
         $set: {
           assignedTo: new Types.ObjectId(assignTaskDto.assigneeId),
@@ -360,12 +363,12 @@ export class TasksService {
       {
         returnDocument: 'after',
       },
-    );
+    ).lean().exec();
     if (!updatedTask) throw new InternalServerErrorException('Failed to assign task. Try later please');
     await this.cache.del(TASK_CACHE_KEYS.details(taskId))
     await this.cache.del(TASK_CACHE_KEYS.allAdmin)
     await this.cache.del(TASK_CACHE_KEYS.allByUser(user.id))
-    return updatedTask
+    return normalizeItem(updatedTask)
   }
 
   async unAssign(taskId: string, user: AuthorizedUser, task: Task) {
@@ -379,12 +382,12 @@ export class TasksService {
       {
         returnDocument: 'after',
       },
-    );
+    ).lean().exec();
     if (!updatedTask) throw new InternalServerErrorException('Failed to unassign task. Try later please');
     await this.cache.del(TASK_CACHE_KEYS.details(taskId))
     await this.cache.del(TASK_CACHE_KEYS.allAdmin)
     await this.cache.del(TASK_CACHE_KEYS.allByUser(user.id))
-    return updatedTask
+    return normalizeItem(updatedTask)
   }
 
   async addAttachmentToTask(taskId: string, file: Express.Multer.File) {
@@ -405,25 +408,26 @@ export class TasksService {
         },
       },
       { returnDocument: 'after' },
-    );
+    ).lean().exec();
     if (!updatedTask) throw new InternalServerErrorException('Failed to add attachment to task. Try later please');
     await this.cache.del(TASK_CACHE_KEYS.details(taskId))
     await this.cache.del(TASK_CACHE_KEYS.allAdmin)
     await this.cache.del(TASK_CACHE_KEYS.allByUser(task.createdBy.toString()))
-    return updatedTask
+    return normalizeItem(updatedTask)
 
   }
 
   async getTaskById(id: string) {
-    const cache = await this.cache.get(TASK_CACHE_KEYS.details(id));
-    if (cache) return cache as Task;
+    const cache = await this.cache.get(TASK_CACHE_KEYS.details(id)) as Task;
+    if (cache) return normalizeItem(cache)
     const task = await this.taskModel
       .findOne({ _id: new Types.ObjectId(id) })
       .lean()
       .exec();
-    if (!task)
+    if (!task) {
       throw new NotFoundException('Task not found or has already been deleted');
+    }
     await this.cache.set(TASK_CACHE_KEYS.details(id), task)
-    return task;
+    return normalizeItem(task)
   }
 }

@@ -40,7 +40,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.CREATED,
       message: 'Task created successfully',
-      task: createdTask,
+      data: createdTask,
     };
   }
 
@@ -59,7 +59,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Task updated successfully',
-      task: updatedTask,
+      data: updatedTask,
     };
   }
 
@@ -69,7 +69,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Task fetched successfully',
-      task: req.task,
+      data: req.task,
     };
   }
 
@@ -81,7 +81,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Task deleted successfully',
-      deletedTask,
+      data: deletedTask,
     };
   }
 
@@ -101,7 +101,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.OK,
       message: `Task assigned successfully`,
-      task: assignedTask,
+      data: assignedTask,
     };
   }
 
@@ -112,7 +112,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.OK,
       message: `Task un-assigned successfully`,
-      task: updatedTask,
+      data: updatedTask,
     };
   }
 
@@ -145,7 +145,7 @@ export class TasksController {
     return {
       statusCode: HttpStatus.OK,
       message: 'Attachment uploaded successfully',
-      task: updatedTask,
+      data: updatedTask,
     };
   }
 }

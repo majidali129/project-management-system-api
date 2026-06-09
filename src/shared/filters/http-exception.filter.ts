@@ -14,7 +14,6 @@ export class HttpExceptionFilter implements ExceptionFilter{
         const exceptionResponse = exception instanceof HttpException? exception.getResponse(): null;
 
         let message = exception.message || 'Internal server error'
-        console.log('Exception: ',exceptionResponse)
         let errDetails: any = exceptionResponse;
         if(typeof exceptionResponse === 'object' && exceptionResponse !== null) {
             const resObj = exceptionResponse as any;
