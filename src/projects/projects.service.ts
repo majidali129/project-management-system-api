@@ -17,6 +17,11 @@ import { Role } from 'src/shared/types/role';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 import { PROJECT_CACHE_KEYS, PROJECT_CACHE_TTL } from './constants/cache-keys';
 import { TasksService } from 'src/tasks/tasks.service';
+import {
+  GetProjectsQueryDto,
+  SortBy,
+  SortOrder,
+} from './dtos/get-projects-query.dto';
 
 @Injectable()
 export class ProjectsService {
@@ -72,26 +77,80 @@ export class ProjectsService {
     return updatedProject;
   }
 
-  async getAllProjects(user: AuthorizedUser) {
-    let authFilters = {};
+  async getAllProjects(user: AuthorizedUser, query: GetProjectsQueryDto) {
+    const {
+      page: clientPage,
+      limit: clientLimit,
+      search,
+      sortBy: clientSortBy,
+      sortOrder: clientSortOrder,
+    } = query;
+
+    const sortBy = new Set(Object.values(SortBy)).has(
+      (clientSortBy as SortBy) || ('' as SortBy),
+    )
+      ? clientSortBy!
+      : SortBy.createdAt;
+
+    const sortOrder = clientSortOrder === SortOrder.asc ? 1 : -1;
+    const limit = Math.min(
+      clientLimit ?? +process.env.DEFAULT_LIMIT!,
+      +process.env.DEFAULT_LIMIT!,
+    );
+    const page = clientPage ?? +process.env.DEFAULT_PAGE!;
+    const skip = (page - 1) * limit;
+
+    const queryFilter: any[] = [];
+
     if (user.role !== Role.admin) {
-      authFilters = {
+      queryFilter.push({
         $or: [
           { ownerId: new Types.ObjectId(user.id) },
-          {
-            members: { $in: [new Types.ObjectId(user.id)] },
-          },
+          { members: { $in: [new Types.ObjectId(user.id)] } },
         ],
-      };
+      });
+    }
+
+    if (search) {
+      queryFilter.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ],
+      });
     }
     const KEY = user.role === Role.admin ? PROJECT_CACHE_KEYS.allAdmin: PROJECT_CACHE_KEYS.allByUser(user.id)
-    const cached = await this.cache.get(KEY);
-    if (cached)  {
-      return cached as ProjectDocument[]
+    const cached = await this.cache.get(KEY) as ProjectDocument[]
+    if (cached)  return {
+      items: cached ?? [],
+      metadata: {
+        page,limit, total: cached.length,
+        totalPages: Math.ceil(cached.length/limit)
+      }
     }
-    const projects = await this.projectModel.find(authFilters).lean()
-    await this.cache.set(KEY, projects, user.role === Role.admin? PROJECT_CACHE_TTL.admin: PROJECT_CACHE_TTL.user)
-    return projects
+
+    const finalQuery = queryFilter.length > 0 ? { $and: queryFilter } : {};
+    const [items, total] = await Promise.all([
+      this.projectModel
+        .find(finalQuery)
+        .sort({ [sortBy]: sortOrder })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.projectModel.countDocuments(finalQuery),
+    ]);
+
+    await this.cache.set(KEY, items, user.role === Role.admin? PROJECT_CACHE_TTL.admin: PROJECT_CACHE_TTL.user)
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async getProjectDetails(projectId: string, project: Project) {

@@ -8,40 +8,45 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Task } from './schemas/task.schema';
-import { Model, Types, QueryFilter } from 'mongoose';
+import { Model, Types, PipelineStage } from 'mongoose';
 import { CreateTaskDto } from './dtos/create-task.dto';
 import { UpdateTaskDto } from './dtos/update-task.dto';
 import { AssignTaskDto } from './dtos/assign-task.dto';
 import { AuthorizedUser } from 'src/shared/types/auth-user';
 import { canAssign } from './utils/can-assign';
 import { Role } from 'src/shared/types/role';
-import { GetTasksQueryDto } from 'src/projects/dtos/get-tasks-query.dto';
+import {
+  GetTasksQueryDto,
+  SortBy,
+  SortOrder,
+} from 'src/projects/dtos/get-tasks-query.dto';
 import { CloudinaryService } from 'src/uploads/cloudinary/cloudinary.service';
 import { Project } from 'src/projects/schemas/project.schema';
-import { TASK_CACHE_KEYS } from './constants/cache-keys';
-import { PROJECT_CACHE_KEYS } from 'src/projects/constants/cache-keys';
+import { TASK_CACHE_KEYS, TASK_CACHE_TTL } from './constants/cache-keys';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
 
 export interface AggregatedTaskResult {
-  id: string;
-  title: string;
-  description: string;
-  priority: string;
-  status: string;
-  dueDate: Date;
-  projectId: Types.ObjectId;
-  createdBy: Types.ObjectId;
-  assignedTo?: {
-    id: string;
-    name: string;
-    email: string;
-    avatar?: string;
-  };
-  creator: {
-    id: string;
-    name: string;
-    avatar?: string;
-  };
+  items: {
+    _id: string;
+    title: string;
+    description: string;
+    priority: string;
+    status: string;
+    dueDate: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    assignedTo?: {
+      _id: string;
+      name: string;
+      avatar: string;
+    };
+    owner: {
+      _id: string;
+      name: string;
+    };
+    attachment?: { url: string; publicId: string };
+  }[];
+  total: number;
 }
 
 @Injectable()
@@ -93,88 +98,214 @@ export class TasksService {
 
   async getProjectTasks(
     projectId: string,
-    user: AuthorizedUser,
+    { id: userId, role }: AuthorizedUser,
     query: GetTasksQueryDto,
-  ): Promise<AggregatedTaskResult[]> {
-    const matchCriteria: QueryFilter<Task> = {
-      projectId: new Types.ObjectId(projectId),
-    };
+  ) {
+    const {
+      search,
+      status,
+      priority,
+      sortBy: clientSortBy,
+      sortOrder: clientSortOrder,
+      assignedTo,
+      limit: clientLimit,
+      page: clientPage,
+    } = query;
 
-    if (user.role !== Role.admin) {
-      matchCriteria.$or = [
-        { createdBy: new Types.ObjectId(user.id) },
-        { assignedTo: new Types.ObjectId(user.id) },
-      ];
+    const sortBy = new Set(Object.values(SortBy)).has(
+      (clientSortBy as SortBy) || ('' as SortBy),
+    )
+      ? clientSortBy!
+      : SortBy.createdAt;
+    const sortOrder = clientSortOrder === SortOrder.asc ? 1 : -1;
+    const limit = Math.min(
+      clientLimit ?? +process.env.DEFAULT_LIMIT!,
+      +process.env.DEFAULE_LIMIT!,
+    );
+    const page = clientPage ?? +process.env.DEFAULT_PAGE!;
+    const skip = (page - 1) * limit;
+
+    const initialMatch: any[] = [
+      {
+        projectId: new Types.ObjectId(projectId),
+      },
+    ];
+
+    if (role !== Role.admin) {
+      initialMatch.push({
+        $or: [
+          { createdBy: new Types.ObjectId(userId) },
+          { assignedTo: new Types.ObjectId(userId) },
+        ],
+      });
     }
 
-    const KEY = user.role === Role.admin ? TASK_CACHE_KEYS.allAdmin : TASK_CACHE_KEYS.allByUser(projectId)
-    const cached = await this.cache.get(KEY);
-    if (cached) {
-      return cached as AggregatedTaskResult[]
+    const KEY = role === Role.admin ? TASK_CACHE_KEYS.allAdmin : TASK_CACHE_KEYS.allByUser(projectId)
+
+    if (status) initialMatch.push({ status });
+    if (priority) initialMatch.push({ priority });
+    if (assignedTo)
+      initialMatch.push({ assignedTo: new Types.ObjectId(assignedTo) });
+
+    if (search) {
+      initialMatch.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ],
+      });
     }
 
-    const aggregatedTasks =
-      await this.taskModel.aggregate<AggregatedTaskResult>([
-        {
-          $match: matchCriteria,
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'assignedTo',
-            foreignField: '_id',
-            as: 'assignedUser',
+    const pipeline: PipelineStage[] = [
+      {
+        $match: { $and: initialMatch },
+      },
+      {
+        $lookup: {
+          from: 'users',
+          let: {
+            ownerId: '$createdBy',
           },
-        },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'createdBy',
-            foreignField: '_id',
-            as: 'owner',
-          },
-        },
-        {
-          $unwind: { path: '$assignedUser', preserveNullAndEmptyArrays: true },
-        },
-        {
-          $unwind: { path: '$owner', preserveNullAndEmptyArrays: true },
-        },
-        {
-          $project: {
-            _id: 0,
-            id: '$_id',
-            title: '$title',
-            description: '$description',
-            priority: '$priority',
-            status: '$status',
-            dueDate: '$dueDate',
-            projectId: '$projectId',
-            // createdBy: '$createdBy',
-            assignedTo: {
-              $cond: {
-                if: { $ifNull: ['$assignedUser._id', false] },
-                then: {
-                  id: '$assignedUser._id',
-                  name: '$assignedUser.name',
-                  email: '$assignedUser.email',
-                  avatar: '$assignedUser.avatar',
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ['$_id', '$$ownerId'],
                 },
-                else: '$$REMOVE',
               },
             },
-            creator: {
-              id: '$owner._id',
-              name: '$owner.name',
-              avatar: '$owner.avatar',
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                avatar: 1,
+              },
             },
-          },
+          ],
+          as: 'owner',
         },
-      ]);
+      },
+      {
+        $lookup: {
+          from: 'users',
+          let: {
+            assignedTo: '$assignedTo',
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $ne: ['$$assignedTo', null] },
+                    { $eq: ['$_id', '$$assignedTo'] },
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                avatar: 1,
+                createdAt: 1,
+              },
+            },
+          ],
+          as: 'assignedTo',
+        },
+      },
+      {
+        $unwind: {
+          path: '$owner',
+        },
+      },
+      {
+        $unwind: {
+          path: '$assignedTo',
+          preserveNullAndEmptyArrays: true,
+        },
+      }
+    ];
 
-    await this.cache.set(KEY, aggregatedTasks);
+    pipeline.push( 
+      {
+      $project: {
+        _id: 1,
+        title: 1,
+        description: 1,
+        status: 1,
+        priority: 1,
+        dueDate: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        owner: 1,
+        assignedTo: 1,
+        attachment: 1,
+      },
+    },
+    {
+      $facet: {
+        items: [
+          {
+            $sort: {
+              [sortBy]: sortOrder,
+            },
+          }, {
+            $skip: skip,
+          },
+          {
+            $limit: limit,
+          },
+        ],
+        meta: [
+          {
+            $count: 'total',
+          },
+        ],
+      },
+    },
+    {
+      $project: {
+        items: 1,
+        total: {
+          $ifNull: [{ $arrayElemAt: ['$meta.total', 0] }, 0],
+        },
+      },
+    }
+    );
+    
 
-    return aggregatedTasks;
+    const cached = await this.cache.get(KEY) as AggregatedTaskResult['items'];
+    if (cached) {
+      return {
+        items: cached?? [],
+        metadata: {
+          page,
+          limit,
+          total: cached.length,
+          totalPages: Math.ceil(cached.length / limit)
+        }
+      }
+    }
+
+    const aggregatedResult =
+      await this.taskModel.aggregate<AggregatedTaskResult>(pipeline);
+    const data: AggregatedTaskResult = aggregatedResult[0] || {
+      items: [],
+      total: 0,
+    };
+
+    await this.cache.set(KEY, data.items, role === Role.admin?  TASK_CACHE_TTL.admin: TASK_CACHE_TTL.user);
+
+    return {
+      items: data?.items ?? [],
+      metadata: {
+        page,
+        limit,
+        total: data.total,
+        totalPages: Math.ceil(data.total / limit),
+      },
+    };
   }
 
 

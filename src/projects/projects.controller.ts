@@ -22,9 +22,9 @@ import { AuthGuard } from 'src/shared/guards/auth.guard';
 import { AddProjectMembersDto } from './dtos/add-project-members.dto';
 import { ProjectOwnerOrAdminGuard } from './guards/project-owner-admin.guard';
 import { ProjectAccessGuard } from './guards/project-access.guard';
-import { TasksService } from 'src/tasks/tasks.service';
 import { GetTasksQueryDto } from './dtos/get-tasks-query.dto';
 import type { Request } from 'express';
+import { GetProjectsQueryDto } from './dtos/get-projects-query.dto';
 
 @Controller('projects')
 @UseGuards(AuthGuard)
@@ -85,14 +85,22 @@ export class ProjectsController {
       project: updatedProject,
     };
   }
-
   @Get()
-  async getAllProjects(@User() user: AuthorizedUser) {
-    const projects = await this.projectService.getAllProjects(user);
+  async getAllProjects(
+    @User() user: AuthorizedUser,
+    @Query(new ValidationPipe({ transform: true })) query: GetProjectsQueryDto,
+  ) {
+    const { items, metadata } = await this.projectService.getAllProjects(
+      user,
+      query,
+    );
     return {
       statusCode: HttpStatus.OK,
       message: 'Projects fetched successfully',
-      projects,
+      data: {
+        items,
+        metadata,
+      },
     };
   }
 
@@ -172,15 +180,16 @@ export class ProjectsController {
     @User() user: AuthorizedUser,
     @Query(new ValidationPipe({ transform: true })) query: GetTasksQueryDto,
   ) {
-    const tasks = await this.projectService.getProjectTasks(
+    const {items, metadata} = await this.projectService.getProjectTasks(
       projectId,
       user,
       query,
     );
+
     return {
       statusCode: HttpStatus.OK,
       message: 'Tasks for this project fetched successfully',
-      tasks,
+      data: { items, metadata },
     };
   }
 }
