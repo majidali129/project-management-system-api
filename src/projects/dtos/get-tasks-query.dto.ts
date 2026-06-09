@@ -22,6 +22,18 @@ export enum SortOrder {
   desc = 'desc',
 }
 
+export enum SortBy {
+  createdAt = 'createdAt',
+  updatedAt = 'updatedAt',
+  status = 'status',
+  dueDate = 'dueDate',
+}
+
+export enum SortOrder {
+  asc = 'asc',
+  desc = 'desc',
+}
+
 export class GetTasksQueryDto {
   @IsOptional()
   @Type(() => Number)
