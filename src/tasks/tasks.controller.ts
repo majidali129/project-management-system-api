@@ -38,8 +38,7 @@ export class TasksController {
   async createTask(@Body() dto: CreateTaskDto, @User() user: AuthorizedUser) {
     const createdTask = await this.taskService.createTask(dto, user.id);
     return {
-      success: true,
-      status: HttpStatus.CREATED,
+      statusCode: HttpStatus.CREATED,
       message: 'Task created successfully',
       task: createdTask,
     };
@@ -58,8 +57,7 @@ export class TasksController {
       req.project._id.toString(),
     );
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Task updated successfully',
       task: updatedTask,
     };
@@ -69,8 +67,7 @@ export class TasksController {
   @UseGuards(ProjectAccessGuard, TaskAccessGuard)
   getTaskDetails(@Req() req: Request) {
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Task fetched successfully',
       task: req.task,
     };
@@ -82,8 +79,7 @@ export class TasksController {
     const deletedTask = await this.taskService.deleteTask(taskId, req.user, req.task);
 
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Task deleted successfully',
       deletedTask,
     };
@@ -103,8 +99,7 @@ export class TasksController {
       req.project
     );
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: `Task assigned successfully`,
       task: assignedTask,
     };
@@ -115,8 +110,7 @@ export class TasksController {
   async unAssignTask(@Param('taskId') taskId: string, @Req() req: Request) {
     const updatedTask = await this.taskService.unAssign(taskId, req.user, req.task);
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: `Task un-assigned successfully`,
       task: updatedTask,
     };
@@ -149,8 +143,7 @@ export class TasksController {
     );
 
     return {
-      success: true,
-      status: HttpStatus.OK,
+      statusCode: HttpStatus.OK,
       message: 'Attachment uploaded successfully',
       task: updatedTask,
     };

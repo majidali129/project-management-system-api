@@ -10,6 +10,8 @@ import { load } from 'js-yaml';
 import { join } from 'path';
 import { readFileSync } from 'fs';
 import { SwaggerModule } from '@nestjs/swagger';
+import { TransformInterceptor } from './shared/interceptors/transform.interceptor';
+import { HttpExceptionFilter } from './shared/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -29,14 +31,15 @@ async function bootstrap() {
         );
 
         return new BadRequestException({
-          success: false,
           message: 'Validation failed',
-          statusCode: HttpStatus.BAD_REQUEST,
           errors: formatedErrors,
         });
       },
     }),
   );
+
+  app.useGlobalInterceptors(new TransformInterceptor())
+  app.useGlobalFilters(new HttpExceptionFilter())
 
   app.enableCors();
   const yamlPath = join(process.cwd(), 'docs/api', 'openapi.yaml');

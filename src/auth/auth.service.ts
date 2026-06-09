@@ -46,7 +46,8 @@ export class AuthService {
       role,
     });
 
-    const result = await this.cloudinaryService.uploadAvatar(file);
+    if(file) {
+      const result = await this.cloudinaryService.uploadAvatar(file);
 
     createdUser.avatar = {
       url: result.secure_url,
@@ -54,13 +55,10 @@ export class AuthService {
     };
 
     await createdUser.save({ validateBeforeSave: false });
+    }
 
     //TODO: 5. Call Email Sercice to Send email for verification ( Optional )
-    return {
-      success: true,
-      message: 'User registered successfully',
-      status: HttpStatus.CREATED,
-    };
+   return true
   }
   async login({ email, password }: LoginUserDto) {
     const user = await this.userModel.findOne({ email }).exec();

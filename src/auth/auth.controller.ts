@@ -29,7 +29,7 @@ export class AuthController {
 
   @Post('/signup')
   @UseInterceptors(FileInterceptor('avatar'))
-  signUp(
+  async signUp(
     @Body() body: CreateUserDto,
     @UploadedFile(
       new ParseFilePipe({
@@ -45,7 +45,11 @@ export class AuthController {
     )
     file: Express.Multer.File,
   ) {
-    return this.authService.signUp(body, file);
+    await this.authService.signUp(body, file);
+    return {
+      message: 'User registered successfully',
+      status: HttpStatus.CREATED,
+    };
   }
 
   @HttpCode(HttpStatus.OK)
@@ -60,7 +64,6 @@ export class AuthController {
     res.set('Authorization', `Bearer ${accessToken}`);
 
     return {
-      success: true,
       message: 'Login successfull',
       accessToken,
       refreshToken,
@@ -93,7 +96,6 @@ export class AuthController {
     res.set('Authorization', `Bearer ${accessToken}`);
 
     return {
-      success: true,
       message: 'Token refreshed successfully',
       accessToken,
       refreshToken: newRefreshToken,
