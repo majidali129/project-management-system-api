@@ -1,119 +1,27 @@
 # Project Management System API
 
-A production-ready RESTful API built with NestJS, TypeScript, MongoDB, and Mongoose for managing projects, tasks, and comments. The API implements JWT Authentication, Role-Based Access Control (RBAC), project-based permissions, task assignment workflows, filtering, searching, pagination, and complete OpenAPI/Swagger documentation.
-
----
-
-## Features
-
-### Authentication & Authorization
-
-- JWT-based authentication
-- Secure login and logout
-- Role-Based Access Control (RBAC)
-- Roles:
-  - `admin`
-  - `user`
-
-### Project Management
-
-- Create projects
-- Update project information
-- Delete projects
-- Archive or activate projects
-- Manage project members
-- View project details
-- Project ownership controls
-
-### Task Management
-
-- Create tasks within projects
-- Update task details
-- Delete tasks
-- Assign tasks to project members
-- Unassign tasks
-- Track task status
-- Track task priority
-- Add attachement to task
-
-### Comments System
-
-- Create comments on tasks
-- View comments
-- Update comments
-- Delete comments
-- Ownership-based comment permissions
-
-### Advanced Querying
-
-- Pagination
-- Search
-- Filtering
-- Sorting
-
-Supported task filters:
-
-- Status
-- Priority
-- Assigned User
-
-Supported sorting:
-
-- Created Date
-- Due Date
-- Any supported task field
-
-### API Documentation
-
-- OpenAPI 3.0 Specification
-- Interactive Swagger UI
-- Request and response examples
-- Error response documentation
-
 ---
 
 ## Folder Structure
 
 ```text
 src/
-├── auth/                 # Authentication and JWT strategies
-├── users/                # User management
-├── projects/             # Project management
-├── tasks/                # Task management
-├── comments/             # Comment management
-├── uploads/             # File upload management
-│
+├── auth/
+├── users/
+├── projects/
+├── tasks/
+├── comments/
+├── uploads/
 ├── common/
-│   ├── guards/           # Authorization guards
-│   ├── decorators/       # Custom decorators
-│   └── pipes/            # Validation pipes
-│
-├── config/               # Application configuration
-├── database/             # Database configuration
-└── main.ts               # Application bootstrap
+│   ├── guards/
+│   ├── decorators/
+│   ├── filters/
+│   ├── interceptors/
+│   └── pipes/
+├── config/
+├── database/
+└── main.ts
 ```
-
----
-
-## Tech Stack
-
-- NestJS
-- TypeScript
-- MongoDB
-- Mongoose
-- JWT Authentication
-- Class Validator
-- Swagger / OpenAPI
-
----
-
-## Prerequisites
-
-Before running the project, make sure you have installed:
-
-- Node.js (v18 or later recommended)
-- pnpm
-- typescript
 
 ---
 
@@ -134,47 +42,31 @@ pnpm install
 
 ### 3. Configure Environment Variables
 
-Create a `.env` file in the project root.
+Copy `.env.example` to `.env` and fill in your values.
 
-```env
-PORT=3000
+| Variable | Description |
+| --- | --- |
+| `PORT` | Server port (default `3000`) |
+| `DB_URI` | MongoDB connection string |
+| `ACCESS_TOKEN_SECRET` | JWT access token secret |
+| `ACCESS_TOKEN_EXPIRY` | Access token expiry (e.g. `2d`) |
+| `REFRESH_TOKEN_SECRET` | JWT refresh token secret |
+| `REFRESH_TOKEN_EXPIRY` | Refresh token expiry (e.g. `7d`) |
+| `DEFAULT_LIMIT` | Default pagination limit |
+| `DEFAULT_PAGE` | Default pagination page |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
 
-DB_URI=mongodb://localhost:27017/project-management
-
-ACCESS_TOKEN_SECRET=your_access_token_secret
-ACCESS_TOKEN_EXPIRY=2d
-REFRESH_TOKEN_SECRET=your_refresh_token_secret
-REFRESH_TOKEN_EXPIRY=7d
-DEFAULT_LIMIT=5
-DEFAULT_PAGE=1
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-
-```
-
-> Replace above values with your own configuration.
-
-### 5. Run Application
-
-Development mode:
+### 4. Run Application
 
 ```bash
 pnpm run start:dev
 ```
 
-Production build:
-
-```bash
-pnpm run build
-pnpm run start:prod
-```
-
 ---
 
 ## API Base URL
-
-Local Development:
 
 ```text
 http://localhost:3000
@@ -184,19 +76,25 @@ http://localhost:3000
 
 ## Swagger Documentation
 
-Once the server is running, access Swagger UI:
+Swagger UI (server must be running):
 
 ```text
 http://localhost:3000/api
 ```
 
-OpenAPI Specification:
+![Swagger UI](assets/api-docs-view.png)
 
-```text
-http://localhost:3000/api-docs-json
-```
+---
 
-> Update URLs if your Swagger configuration uses different routes.
+## API Documentation
+
+OpenAPI specification: [docs/api/openapi.yaml](docs/api/openapi.yaml)
+
+---
+
+## Database Schema
+
+Schema explanation: [docs/database-schema.md](docs/database-schema.md)
 
 ---
 
@@ -204,13 +102,9 @@ http://localhost:3000/api-docs-json
 
 ### Register
 
-Endpoint:
-
 ```http
 POST /auth/signup
 ```
-
-Example Request:
 
 ```json
 {
@@ -221,17 +115,11 @@ Example Request:
 }
 ```
 
----
-
 ### Login
-
-Endpoint:
 
 ```http
 POST /auth/login
 ```
-
-Example Request:
 
 ```json
 {
@@ -240,22 +128,7 @@ Example Request:
 }
 ```
 
-Successful response:
-
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "accessToken": "<jwt-token>",
-  "refreshToken": "<refresh-token>"
-}
-```
-
----
-
-### Using Protected Routes
-
-Include the access token in the Authorization header:
+Response includes `accessToken` and `refreshToken`. Use the access token on protected routes:
 
 ```http
 Authorization: Bearer <access-token>
@@ -286,16 +159,12 @@ Authorization: Bearer <token>
 }
 ```
 
----
-
 ### Get All Projects
 
 ```http
-GET /projects
+GET /projects?page=1&limit=5&search=nestjs
 Authorization: Bearer <token>
 ```
-
----
 
 ### Create Task
 
@@ -313,35 +182,18 @@ Authorization: Bearer <token>
 }
 ```
 
----
-
 ### Get Tasks With Filtering
 
 ```http
-GET /projects/{projectId}/tasks?page=1&limit=5&status=todo&priority=high&sortBy=dueDate&sortOrder=asc
+GET /projects/{projectId}/tasks?page=1&limit=10&status=done&sortBy=dueDate&sortOrder=desc
+Authorization: Bearer <token>
 ```
-
----
-
-### Assign Task
-
-```http
-PATCH /projects/{projectId}/tasks/{taskId}/assign-task
-```
-
-```json
-{
-  "assigneeId": "userId",
-  "projectId": "projectId"
-}
-```
-
----
 
 ### Create Comment
 
 ```http
 POST /tasks/{taskId}/comments
+Authorization: Bearer <token>
 ```
 
 ```json
@@ -349,98 +201,4 @@ POST /tasks/{taskId}/comments
   "content": "Looks good, merging now."
 }
 ```
-
----
-
-## Roles & Permissions
-
-### Admin
-
-Can:
-
-- Access all projects
-- Manage all projects
-- Manage all tasks
-- Assign tasks
-- Manage project members
-
-### User
-
-Can:
-
-- Access projects they own
-- Access projects where they are a member
-- Create tasks within accessible projects
-- Manage tasks they created or are assigned to
-- Manage their own comments
-
----
-
-## Error Responses
-
-Common HTTP status codes used by the API:
-
-| Status Code | Description        |
-| ----------- | ------------------ |
-| 200         | Success            |
-| 201         | Resource Created   |
-| 400         | Validation Error   |
-| 401         | Unauthorized       |
-| 403         | Forbidden          |
-| 404         | Resource Not Found |
-| 500         | Server Error       |
-
-Example validation error:
-
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "statusCode": 400,
-  "errors": {
-    "email": ["Email must be a valid email address"]
-  }
-}
-```
-
----
-
-## API Modules
-
-### Authentication
-
-- Sign Up
-- Login
-- Logout
-- Refresh Tokens
-
-### Projects
-
-- Create Project
-- Get Projects
-- Get Project Details
-- Update Project
-- Delete Project
-- Toggle Status
-- Add Members
-- Get Members
-- Remove Members
-
-### Tasks
-
-- Create Task
-- Get Tasks
-- Get Task Details
-- Update Task
-- Delete Task
-- Assign Task
-- Unassign Task
-- Add attachment
-
-### Comments
-
-- Create Comment
-- Get Comments
-- Get Comment
-- Update Comment
-- Delete Comment
+ter
